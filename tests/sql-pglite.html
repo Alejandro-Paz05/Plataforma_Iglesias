@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Prueba de migraciones SQL con PGlite</title>
+  <!--
+    Ejecuta las migraciones de supabase/migrations y el script de verificación
+    en PostgreSQL (PGlite/WebAssembly) dentro del navegador, con un entorno que
+    imita a Supabase (roles anon/authenticated, esquemas auth y storage).
+    Requiere conexión a Internet (descarga PGlite desde jsDelivr).
+    Uso: servidor-local.ps1 y abrir http://localhost:8080/tests/sql-pglite.html
+  -->
+  <style>body{font:14px/1.5 Consolas,monospace;margin:20px;background:#f8fafc}pre{white-space:pre-wrap}</style>
+</head>
+<body>
+  <h1>Prueba de migraciones SQL (PGlite)</h1>
+  <pre id="salida">Cargando PGlite…
+</pre>
+  <script type="module" src="sql-pglite.js"></script>
+</body>
+</html>

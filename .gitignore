@@ -1,0 +1,12 @@
+# Respaldos (contienen información personal y financiera)
+respaldos/
+*.dump
+*.dump.sha256
+respaldo-cee-*.json
+
+# Carpeta generada para publicación
+publicar/
+
+# Sistema
+Thumbs.db
+.DS_Store
