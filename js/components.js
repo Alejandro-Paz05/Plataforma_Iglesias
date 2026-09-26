@@ -5,7 +5,7 @@ import {
 } from './utils.js';
 
 export const COLUMNAS_MIEMBRO =
-  'id, numero_miembro, nombre, apellido, direccion, ciudad, estado, zip, telefono, email, tipo_persona, activo, familia_id';
+  'id, numero_miembro, nombre, apellido, direccion, ciudad, estado, zip, telefono, email, tipo_persona, activo, familia_id, es_anonimo';
 
 export const ESTADOS_APORTACION = {
   REGISTRADA: { texto: 'Registrada', clase: 'verde' },
@@ -40,6 +40,13 @@ export function uuid() {
 
 export async function cargarMiembro(id) {
   const { data, error } = await sb.from('miembros').select(COLUMNAS_MIEMBRO).eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Registro del sistema que recibe las aportaciones anónimas (null si falta la migración 08).
+export async function cargarAnonimo() {
+  const { data, error } = await sb.from('miembros').select(COLUMNAS_MIEMBRO).eq('es_anonimo', true).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -180,6 +187,8 @@ export function selectorMiembro(contenedor, opcionesSelector = {}) {
   const {
     inicial = null,
     soloActivos = true,
+    // Cartas, estados de cuenta y familias no aplican al donante anónimo.
+    excluirAnonimo = false,
     alCambiar = () => {},
     idEntrada = 'selector-miembro',
     placeholder = 'Buscar por nombre, apellido, número, teléfono o email…',
@@ -261,6 +270,7 @@ export function selectorMiembro(contenedor, opcionesSelector = {}) {
     mostrarLista(html`<div class="selector-vacio">Buscando…</div>`);
     let q = sb.from('miembros').select(COLUMNAS_MIEMBRO).order('apellido').order('nombre').limit(12);
     if (soloActivos) q = q.eq('activo', true);
+    if (excluirAnonimo) q = q.eq('es_anonimo', false);
     for (const p of palabrasBusqueda(texto)) q = q.ilike('texto_busqueda', `%${p}%`);
     const { data, error } = await q;
     if (n !== solicitud || seleccionado) return;

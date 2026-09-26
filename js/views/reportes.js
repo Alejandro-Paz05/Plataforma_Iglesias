@@ -29,6 +29,9 @@ const f = {
 
 const NOTA_VALIDAS = 'Solo aportaciones válidas (se excluyen las anuladas y corregidas).';
 
+// "Pérez, Juan"; el donante anónimo (sin apellido) aparece como "Anónimo".
+const apellidoNombre = (x) => [x.miembro_apellido, x.miembro_nombre].filter(Boolean).join(', ');
+
 export async function render({ cont, query, titulo }) {
   titulo('Reportes');
   if (query.get('tipo') && TIPOS.some((t) => t.id === query.get('tipo'))) f.tipo = query.get('tipo');
@@ -248,9 +251,9 @@ async function construir(tipo) {
           titulo: 'Totales por miembro/donante',
           columnas: [{ titulo: 'No. miembro' }, { titulo: 'Miembro/donante' }, { titulo: 'Cantidad', alinear: 'derecha' },
             { titulo: 'Total', alinear: 'derecha' }, { titulo: '% del total', alinear: 'derecha' }],
-          filas: grupos.map((g) => [g.etiqueta.numero_miembro, `${g.etiqueta.miembro_apellido}, ${g.etiqueta.miembro_nombre}`,
+          filas: grupos.map((g) => [g.etiqueta.numero_miembro, apellidoNombre(g.etiqueta),
             entero(g.cantidad), dineroCentavos(g.centavos), pct(g.centavos, total)]),
-          csv: grupos.map((g) => [g.etiqueta.numero_miembro, `${g.etiqueta.miembro_apellido}, ${g.etiqueta.miembro_nombre}`,
+          csv: grupos.map((g) => [g.etiqueta.numero_miembro, apellidoNombre(g.etiqueta),
             g.cantidad, g.centavos / 100, total ? Number(((g.centavos / total) * 100).toFixed(2)) : 0]),
           pie: ['TOTAL', `${entero(grupos.length)} donante(s)`, entero(filasRango.length), dineroCentavos(total), total ? '100.0%' : ''],
         }],

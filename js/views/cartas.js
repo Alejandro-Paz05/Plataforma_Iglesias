@@ -105,10 +105,11 @@ export async function render({ cont, query, titulo }) {
     $('#tab-lote', cont).hidden = b.dataset.tab !== 'lote';
   }));
 
-  const [miembroInicial, familias] = await Promise.all([
+  const [miembroConsultado, familias] = await Promise.all([
     query.get('miembro') ? cargarMiembro(query.get('miembro')) : null,
     cargarFamilias(),
   ]);
+  const miembroInicial = miembroConsultado?.es_anonimo ? null : miembroConsultado;
   const familiaInicial = familias.find((f) => f.id === query.get('familia')) || null;
   individual($('#tab-individual', cont), { miembroInicial, familiaInicial, familias }, Number(query.get('anio')) || anioPredeterminado());
   lote($('#tab-lote', cont));
@@ -132,7 +133,7 @@ function individual(el, { miembroInicial, familiaInicial, familias }, anioInicia
     </form>
     <div id="carta" class="mt-2"></div>`);
 
-  const selector = selectorMiembro($('#miembro', el), { inicial: miembroInicial, soloActivos: false });
+  const selector = selectorMiembro($('#miembro', el), { inicial: miembroInicial, soloActivos: false, excluirAnonimo: true });
   const destinatarioElegido = enlazarDestinatario(el);
 
   $('#form-carta', el).addEventListener('submit', async (e) => {
@@ -309,7 +310,7 @@ async function listarArchivo(el, anio, miembro) {
 function lote(el) {
   pintar(el, html`
     <form class="tarjeta formulario" id="form-lote" novalidate>
-      ${alerta('info', 'Genera un solo PDF con una carta por cada donante que tenga aportaciones válidas en el año seleccionado, usando los textos de Configuración. Las familias con carta conjunta reciben una sola carta con el total de todos sus miembros.')}
+      ${alerta('info', 'Genera un solo PDF con una carta por cada donante que tenga aportaciones válidas en el año seleccionado, usando los textos de Configuración. Las familias con carta conjunta reciben una sola carta con el total de todos sus miembros. Las aportaciones anónimas no generan carta.')}
       <div class="fila-campos">
         <div class="campo"><label for="l-anio">Año</label><select id="l-anio" class="entrada">${opciones(aniosDisponibles(), anioPredeterminado())}</select></div>
         <div class="campo"><label for="l-fecha">Fecha de las cartas</label><input id="l-fecha" type="date" class="entrada" value="${hoyISO()}"></div>
@@ -338,12 +339,16 @@ function lote(el) {
       });
       if (error) throw error;
       const porMiembro = new Map();
+      const anonimas = data.filas.filter((f) => f.miembro_anonimo);
       for (const f of data.filas) {
+        if (f.miembro_anonimo) continue;
         if (!porMiembro.has(f.miembro_id)) porMiembro.set(f.miembro_id, []);
         porMiembro.get(f.miembro_id).push(f);
       }
       if (!porMiembro.size) {
-        pintar(res, alerta('advertencia', `No hay aportaciones válidas registradas en ${anio}.`));
+        pintar(res, alerta('advertencia', anonimas.length
+          ? `En ${anio} solo hay aportaciones anónimas: no se genera ninguna carta.`
+          : `No hay aportaciones válidas registradas en ${anio}.`));
         return;
       }
       const [miembros, familias] = await Promise.all([
@@ -393,6 +398,8 @@ function lote(el) {
               <button type="button" class="btn" id="l-csv">${icono('download')} Resumen CSV</button>
             </div>
           </div>
+          ${anonimas.length ? html`<p class="texto-tenue texto-pequeno">No incluye ${entero(anonimas.length)} aportación(es) anónima(s) por
+            ${dineroCentavos(anonimas.reduce((s, f) => s + aCentavos(f.monto), 0))}, que no generan carta.</p>` : ''}
           <div class="tabla-contenedor">
             <table class="tabla tabla-compacta">
               <thead><tr><th>Número</th><th>Donante</th><th>Dirección</th><th class="num">Aportaciones</th><th class="dinero">Total</th><th>Plantilla</th></tr></thead>

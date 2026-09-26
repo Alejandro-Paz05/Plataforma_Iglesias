@@ -289,6 +289,57 @@
     ok(juan.familia_id === null && maria.familia_id === null && mock.miembros.indexOf(juan) >= 0,
       'Al eliminar la familia, sus miembros se conservan sin familia');
 
+    // Aportaciones anónimas
+    var anonimo = mock.miembros.find(function (m) { return m.es_anonimo; });
+    await ir('#/aportaciones/nueva', '#form-aportacion');
+    $('#anonima').click();
+    await hasta(function () { return $('.selector-elegido'); }, 'anónimo elegido');
+    ok(/^Anónimo/.test($('.selector-elegido strong').textContent), 'Botón "Aportación anónima" elige a "' + $('.selector-elegido strong').textContent + '"');
+    escribir($('#monto'), '312.40');
+    $('#form-aportacion').requestSubmit();
+    await hasta(function () { return $('.exito-registro'); }, 'aportación anónima registrada');
+    ok(/Aportación anónima/.test($('.exito-registro .resumen').textContent), 'Confirmación dice "Aportación anónima"');
+    ok($('#otra-mismo').textContent === 'Otra aportación anónima', 'Botón "Otra aportación anónima"');
+    $('#ver-recibo').click();
+    await hasta(function () { return $('.visor-pdf'); }, 'recibo anónimo');
+    ok(true, 'Recibo anónimo PDF generado');
+    await cerrarModal();
+
+    await ir('#/estados-cuenta?miembro=' + anonimo.id, '.documento');
+    ok($('.documento .datos strong').textContent === 'Anónimo' && $('.doc-total').textContent.indexOf('$') >= 0,
+      'Estado de cuenta de "Anónimo" (' + $('.doc-total').textContent.replace(/\s+/g, ' ').trim() + ')');
+
+    await ir('#/reportes', '#filtros-reporte');
+    $('[data-tipo="miembro"]').click();
+    await espera(30);
+    $('#filtros-reporte').requestSubmit();
+    await hasta(function () { return $('#rep-descargar'); }, 'reporte por miembro');
+    var filaAnonima = $$('#salida tbody tr').find(function (tr) { return tr.textContent.indexOf(anonimo.numero_miembro) >= 0; });
+    ok(!!filaAnonima && filaAnonima.cells[1].textContent.trim() === 'Anónimo', 'Reporte por miembro muestra la fila "Anónimo"');
+
+    await ir('#/cartas', '#form-carta');
+    await elegirMiembro('juan');
+    var entradaCarta = null;
+    $('[data-cambiar]').click();
+    entradaCarta = await hasta(function () { return $('#selector-miembro'); }, 'selector de carta');
+    escribir(entradaCarta, 'anonimo');
+    await hasta(function () { return $('.selector-vacio') && !/Buscando/.test($('.selector-vacio').textContent); }, 'búsqueda sin anónimo');
+    ok(!$('.selector-opcion'), 'Carta individual: el donante anónimo no aparece en la búsqueda');
+    $('[data-tab="lote"]').click();
+    $('#form-lote').requestSubmit();
+    await hasta(function () { return $('#l-pdf'); }, 'lote sin anónimo');
+    ok(!$$('#l-resultado tbody tr').some(function (tr) { return tr.textContent.indexOf(anonimo.numero_miembro) >= 0; })
+      && /anónima\(s\)/.test($('#l-resultado').textContent), 'Lote de cartas: excluye las anónimas y lo indica');
+
+    await ir('#/miembros/' + anonimo.id, '.cabecera h2');
+    ok(!$('#alternar-activo') && !$('#eliminar') && !$('#contenido .cabecera a[href^="#/cartas"]') && !!$('#contenido .cabecera a[href^="#/estados-cuenta"]'),
+      'Ficha de "Anónimo": con estado de cuenta, sin carta, desactivar ni eliminar');
+    await ir('#/miembros/' + anonimo.id + '/editar', '#form-miembro');
+    escribir($('#c-notas'), 'Ofrendas en efectivo');
+    $('#form-miembro').requestSubmit();
+    await hasta(function () { return location.hash === '#/miembros/' + anonimo.id; }, 'anónimo guardado');
+    ok(anonimo.notas === 'Ofrendas en efectivo' && anonimo.nombre === 'Anónimo' && anonimo.activo, 'Editar "Anónimo": se guardan las notas y conserva su nombre');
+
     // 14. Configuración
     await ir('#/configuracion', '#form-inst');
     escribir($('#i-ein'), '123');

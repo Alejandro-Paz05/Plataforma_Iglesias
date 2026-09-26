@@ -6,7 +6,7 @@ import {
   dinero, nombreCompleto, aCentavos,
 } from '../utils.js';
 import { icono } from '../icons.js';
-import { selectorMiembro, cargarMiembro, opciones, uuid, insigniaEstado } from '../components.js';
+import { selectorMiembro, cargarMiembro, cargarAnonimo, opciones, uuid, insigniaEstado } from '../components.js';
 import { pdfRecibo, mostrarPDF, descargarPDF } from '../pdf.js';
 
 // Valores recordados entre registros consecutivos (captura por lotes).
@@ -87,6 +87,9 @@ function mostrarFormulario(cont, { original = null, miembro = null } = {}) {
         <div class="campo">
           <label class="requerido" for="selector-miembro">Miembro / donante</label>
           <div id="miembro"></div>
+          <div class="rapidos">
+            <button type="button" class="chip" id="anonima">Aportación anónima</button>
+          </div>
         </div>
         <div class="fila-campos">
           <div class="campo">
@@ -155,6 +158,20 @@ function mostrarFormulario(cont, { original = null, miembro = null } = {}) {
 
   const selector = selectorMiembro($('#miembro', cont), { inicial: miembro, soloActivos: !original });
   if (!miembro) selector.enfocar(); else $('#monto', cont).focus();
+
+  $('#anonima', cont).addEventListener('click', async () => {
+    try {
+      const anonimo = await cargarAnonimo();
+      if (!anonimo) {
+        pintar($('#mensaje', cont), alerta('error', 'Falta instalar las aportaciones anónimas en la base de datos (migración 08).'));
+        return;
+      }
+      selector.establecer(anonimo);
+      $('#monto', cont).focus();
+    } catch (err) {
+      pintar($('#mensaje', cont), alerta('error', mensajeError(err)));
+    }
+  });
 
   const bienes = $('#bienes', cont);
   bienes.addEventListener('change', () => { $('#bloque-bienes', cont).hidden = bienes.value !== 'si'; });
@@ -267,7 +284,7 @@ function mostrarExito(cont, a, miembro, original) {
       <h2>${original ? 'Corrección registrada correctamente.' : 'Aportación registrada correctamente.'}</h2>
       <div class="recibo-numero">${a.numero_recibo}</div>
       <p class="resumen">
-        ${nombreCompleto(miembro)} — ${miembro.numero_miembro}<br>
+        ${miembro.es_anonimo ? 'Aportación anónima' : `${nombreCompleto(miembro)} — ${miembro.numero_miembro}`}<br>
         ${a.fondo_nombre} · <strong>${dinero(a.monto)}</strong> · ${a.metodo_pago_nombre}${a.referencia_pago ? ` #${a.referencia_pago}` : ''} · ${fecha(a.fecha_aportacion)}
         ${original ? html`<br><span class="texto-tenue">Reemplaza al recibo ${original.numero_recibo}</span>` : ''}
       </p>
@@ -277,7 +294,7 @@ function mostrarExito(cont, a, miembro, original) {
         <button type="button" class="btn" id="nueva">${icono('plus-circle')} NUEVA APORTACIÓN</button>
       </div>
       <div class="acciones mt-2">
-        ${miembro.activo !== false ? html`<button type="button" class="btn btn-texto" id="otra-mismo">Otra aportación de ${miembro.nombre}</button>` : ''}
+        ${miembro.activo !== false ? html`<button type="button" class="btn btn-texto" id="otra-mismo">${miembro.es_anonimo ? 'Otra aportación anónima' : `Otra aportación de ${miembro.nombre}`}</button>` : ''}
         <a class="btn btn-texto" href="#/aportaciones/${a.id}">Ver detalle</a>
       </div>
     </div>`);

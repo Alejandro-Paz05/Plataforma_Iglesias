@@ -58,7 +58,7 @@ export async function lista({ cont, titulo }) {
     const res = $('#resultado', cont);
     res.style.opacity = '.6';
     let q = sb.from('miembros')
-      .select('id, numero_miembro, nombre, apellido, tipo_persona, telefono, email, ciudad, activo', { count: 'exact' });
+      .select('id, numero_miembro, nombre, apellido, tipo_persona, telefono, email, ciudad, activo, es_anonimo', { count: 'exact' });
     if (filtros.estado === 'activos') q = q.eq('activo', true);
     else if (filtros.estado === 'inactivos') q = q.eq('activo', false);
     if (filtros.tipo) q = q.eq('tipo_persona', filtros.tipo);
@@ -79,7 +79,9 @@ export async function lista({ cont, titulo }) {
             ${data.length ? data.map((m) => html`
               <tr class="clic" data-id="${m.id}" tabindex="0">
                 <td class="mono nowrap">${m.numero_miembro}</td>
-                <td><strong>${m.apellido}</strong>, ${m.nombre}</td>
+                <td>${m.es_anonimo
+                  ? html`<strong>${m.nombre}</strong> <span class="insignia">Aportaciones anónimas</span>`
+                  : html`<strong>${m.apellido}</strong>, ${m.nombre}`}</td>
                 <td>${m.tipo_persona}</td>
                 <td class="nowrap">${m.telefono || ''}</td>
                 <td>${m.email || ''}</td>
@@ -144,10 +146,12 @@ export async function formulario({ cont, params, query, titulo }) {
       <section class="tarjeta">
         <div class="tarjeta-titulo"><h3>Datos personales</h3></div>
         <div class="formulario">
+          ${m.es_anonimo ? alerta('info', html`Registro del sistema para las aportaciones anónimas: siempre aparece como
+            <strong>${m.nombre}</strong> y su nombre no se puede cambiar.`) : html`
           <div class="fila-campos">
             ${campo('nombre', 'Nombre', { requerido: true, max: 80, extra: 'autocomplete="off"' })}
             ${campo('apellido', 'Apellido', { requerido: true, max: 80, extra: 'autocomplete="off"' })}
-          </div>
+          </div>`}
           <div class="fila-campos">
             <div class="campo">
               <label for="c-tipo_persona">Tipo de persona</label>
@@ -155,11 +159,12 @@ export async function formulario({ cont, params, query, titulo }) {
             </div>
             ${campo('fecha_ingreso', 'Fecha de ingreso', { tipo: 'date' })}
           </div>
+          ${m.es_anonimo ? '' : html`
           <div class="campo">
             <label for="c-familia_id">Familia</label>
             <select id="c-familia_id" name="familia_id" class="entrada">${opcionesFamilia(familias, m.familia_id)}</select>
             <div class="ayuda">Opcional. Los miembros de una familia pueden recibir una sola carta anual conjunta.</div>
-          </div>
+          </div>`}
         </div>
       </section>
       <section class="tarjeta">
@@ -184,7 +189,7 @@ export async function formulario({ cont, params, query, titulo }) {
             <label for="c-notas">Notas</label>
             <textarea id="c-notas" name="notas" class="entrada" rows="3" maxlength="1000">${m.notas || ''}</textarea>
           </div>
-          ${id ? html`<label class="casilla"><input type="checkbox" id="c-activo" ${m.activo ? 'checked' : ''}> Miembro activo</label>` : ''}
+          ${id && !m.es_anonimo ? html`<label class="casilla"><input type="checkbox" id="c-activo" ${m.activo ? 'checked' : ''}> Miembro activo</label>` : ''}
         </div>
       </section>
       <div class="acciones">
@@ -193,13 +198,13 @@ export async function formulario({ cont, params, query, titulo }) {
       </div>
     </form>`);
 
-  $('#c-nombre', cont).focus();
+  $('#c-nombre', cont)?.focus();
   const form = $('#form-miembro', cont);
 
   // "Crear familia nueva…": se pide el nombre y se crea al guardar el miembro.
   let familiaAnterior = m.familia_id || '';
   const selFamilia = $('#c-familia_id', cont);
-  selFamilia.addEventListener('change', async () => {
+  selFamilia?.addEventListener('change', async () => {
     if (selFamilia.value !== NUEVA_FAMILIA) {
       familiaAnterior = selFamilia.value;
       return;
@@ -244,14 +249,19 @@ export async function formulario({ cont, params, query, titulo }) {
       notas: valor('notas'),
       familia_id: valor('familia_id'),
     };
-    if (id) datos.activo = $('#c-activo', cont).checked;
+    if (m.es_anonimo) {
+      // Nombre fijo ("Anónimo"), siempre activo y sin familia: lo garantiza el servidor.
+      delete datos.nombre;
+      delete datos.apellido;
+      delete datos.familia_id;
+    } else if (id) datos.activo = $('#c-activo', cont).checked;
 
     // Validación
     const errores = [];
     $$('[aria-invalid]', form).forEach((x) => x.removeAttribute('aria-invalid'));
     const marcar = (k, msg) => { form.elements[k]?.setAttribute('aria-invalid', 'true'); errores.push(msg); };
-    if (!datos.nombre) marcar('nombre', 'El nombre es obligatorio.');
-    if (!datos.apellido) marcar('apellido', 'El apellido es obligatorio.');
+    if (!m.es_anonimo && !datos.nombre) marcar('nombre', 'El nombre es obligatorio.');
+    if (!m.es_anonimo && !datos.apellido) marcar('apellido', 'El apellido es obligatorio.');
     if (datos.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(datos.email)) marcar('email', 'El correo electrónico no es válido.');
     if (datos.fecha_ingreso && datos.fecha_ingreso < '1900-01-01') marcar('fecha_ingreso', 'La fecha de ingreso no es válida.');
     if (errores.length) {
@@ -337,15 +347,18 @@ export async function detalle({ cont, params, titulo }) {
     <div class="cabecera">
       <div>
         <h2>${nombreCompleto(m)}</h2>
-        <p><span class="mono">${m.numero_miembro}</span> · ${m.tipo_persona} · ${insigniaActivo(m.activo)}</p>
+        <p><span class="mono">${m.numero_miembro}</span> · ${m.es_anonimo ? 'Aportaciones anónimas' : m.tipo_persona} · ${insigniaActivo(m.activo)}</p>
       </div>
       <div class="acciones">
         ${m.activo ? html`<a class="btn btn-primario" href="#/aportaciones/nueva?miembro=${m.id}">${icono('plus-circle')} Nueva aportación</a>` : ''}
         <a class="btn" href="#/estados-cuenta?miembro=${m.id}">${icono('file-text')} Estado de cuenta</a>
-        <a class="btn" href="#/cartas?miembro=${m.id}">${icono('mail')} Carta anual</a>
+        ${m.es_anonimo ? '' : html`<a class="btn" href="#/cartas?miembro=${m.id}">${icono('mail')} Carta anual</a>`}
         <a class="btn" href="#/miembros/${m.id}/editar">${icono('edit')} Editar</a>
       </div>
     </div>
+    ${m.es_anonimo ? alerta('info', html`Registro del sistema para las <strong>aportaciones anónimas</strong>. Aparece como
+      “Anónimo” en reportes, historial y estados de cuenta, y sus aportaciones cuentan en todos los totales. No recibe carta anual
+      y no puede eliminarse ni desactivarse.`) : ''}
 
     <div class="rejilla rejilla-4">
       ${tarjetaDato(`Total ${anio}`, dineroCentavos(totalAnio(anio)))}
@@ -359,9 +372,9 @@ export async function detalle({ cont, params, titulo }) {
       <dl class="datos">
         <div><dt>Teléfono</dt><dd>${m.telefono || '—'}</dd></div>
         <div><dt>Correo electrónico</dt><dd>${m.email || '—'}</dd></div>
-        <div><dt>Familia</dt><dd>${familia
+        ${m.es_anonimo ? '' : html`<div><dt>Familia</dt><dd>${familia
           ? html`<a href="#/familias/${familia.id}">${familia.nombre}</a> <span class="mono texto-tenue">${familia.numero_familia}</span>`
-          : html`— <a class="texto-pequeno" href="#/miembros/${m.id}/editar">Asignar</a>`}</dd></div>
+          : html`— <a class="texto-pequeno" href="#/miembros/${m.id}/editar">Asignar</a>`}</dd></div>`}
         <div><dt>Dirección</dt><dd>${direccion.length ? direccion.map((l) => html`${l}<br>`) : '—'}</dd></div>
         <div><dt>Fecha de ingreso</dt><dd>${fecha(m.fecha_ingreso) || '—'}</dd></div>
         <div><dt>Registrado</dt><dd>${fechaHora(m.created_at)}</dd></div>
@@ -395,7 +408,7 @@ export async function detalle({ cont, params, titulo }) {
       : html`<div class="vacio">Este miembro aún no tiene aportaciones registradas.</div>`}
     </section>
 
-    <section class="tarjeta">
+    ${m.es_anonimo ? '' : html`<section class="tarjeta">
       <div class="tarjeta-titulo"><h3>Administración del registro</h3></div>
       <div class="acciones">
         <button type="button" class="btn" id="alternar-activo">
@@ -408,7 +421,7 @@ export async function detalle({ cont, params, titulo }) {
           ? 'Este miembro tiene historial de aportaciones: no puede eliminarse, pero puede desactivarse.'
           : 'Solo se pueden eliminar registros sin aportaciones.'}
       </p>
-    </section>`);
+    </section>`}`);
 
   $$('tr[data-id]', cont).forEach((tr) => {
     const ir = () => { location.hash = `#/aportaciones/${tr.dataset.id}`; };
@@ -416,7 +429,7 @@ export async function detalle({ cont, params, titulo }) {
     tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') ir(); });
   });
 
-  $('#alternar-activo', cont).addEventListener('click', async () => {
+  $('#alternar-activo', cont)?.addEventListener('click', async () => {
     const ok = await confirmar({
       titulo: m.activo ? 'Desactivar miembro' : 'Activar miembro',
       mensaje: m.activo

@@ -320,8 +320,9 @@ export async function pdfRecibo(a, miembro = null, { doc: docExistente = null, n
   y += 20;
 
   const nombre = miembro ? nombreCompleto(miembro) : `${a.miembro_nombre} ${a.miembro_apellido}`;
+  const anonimo = miembro ? !!miembro.es_anonimo : !!a.miembro_anonimo;
   const yIzq = etiquetaValor(doc, 'Recibido de', nombre, MARGEN, y, util * 0.6);
-  etiquetaValor(doc, 'Número de miembro', a.numero_miembro, MARGEN + util * 0.66, y, util * 0.34);
+  if (!anonimo) etiquetaValor(doc, 'Número de miembro', a.numero_miembro, MARGEN + util * 0.66, y, util * 0.34);
   y = yIzq;
   const direccion = miembro ? lineasDireccion(miembro) : [];
   if (direccion.length) {
