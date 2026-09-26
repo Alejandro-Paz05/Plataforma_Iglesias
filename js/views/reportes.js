@@ -278,7 +278,7 @@ async function construir(tipo) {
     case 'fondo':
     case 'metodo': {
       const porFondo = tipo.id === 'fondo';
-      // Métodos elegidos (p. ej., solo Efectivo y Cheque): el reporte incluye siempre su detalle.
+      // Métodos elegidos (p. ej., solo Efectivo y Cheque); sin elegir ninguno se incluyen todos.
       const metodos = porFondo ? [] : f.metodos;
       const nombres = metodos.map(nombreMetodo);
       const todas = await aportaciones({
@@ -290,7 +290,7 @@ async function construir(tipo) {
         ? agrupar(filas, (x) => x.fondo_id, (x) => x.fondo_nombre)
         : agrupar(filas, (x) => x.metodo_pago_id, (x) => x.metodo_pago_nombre);
       const secciones = [seccionAgrupada(porFondo ? 'Totales por fondo' : 'Totales por método de pago', porFondo ? 'Fondo' : 'Método', grupos, total)];
-      if (f.detalle || metodos.length) {
+      if (f.detalle) {
         for (const g of grupos) {
           const delGrupo = filas.filter((x) => (porFondo ? x.fondo_id : x.metodo_pago_id) === g.clave);
           secciones.push(seccionDetalle(delGrupo, `Detalle: ${g.etiqueta}`));
@@ -300,7 +300,7 @@ async function construir(tipo) {
         titulo: porFondo ? 'Aportaciones por fondo' : metodos.length ? `Aportaciones en ${unirNombres(nombres)}` : 'Aportaciones por método de pago',
         subtitulo: [...(metodos.length ? [`${metodos.length > 1 ? 'Métodos' : 'Método'}: ${nombres.join(', ')}`] : []), periodo, NOTA_VALIDAS].join(' · '),
         resumen: resumenBasico(filas),
-        horizontal: f.detalle || metodos.length > 0,
+        horizontal: f.detalle,
         secciones,
         archivo: metodos.length
           ? `reporte-${normalizarBusqueda(nombres.join(' ')).replace(/[^a-z0-9]+/g, '-')}-${f.desde}-a-${f.hasta}`

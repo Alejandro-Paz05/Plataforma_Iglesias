@@ -7,7 +7,7 @@ en la base de datos) ejecute al menos el **nivel 1** en el proyecto de Supabase.
 |---|---|---|---|
 | 1. Verificación SQL | Integridad financiera, numeración, anulación/corrección, inmutabilidad, bitácora, RLS, familias, anónimos | SQL Editor de Supabase | 60 + 17 + 17 pruebas **OK** |
 | 2. Migraciones en PGlite | Que las migraciones se instalan en PostgreSQL limpio y pasan la verificación | Navegador local | 8 migraciones OK + 60 + 17 + 17 pruebas OK |
-| 3. Escenario de interfaz | Flujos completos de la aplicación y generación de PDF (con datos simulados) | Navegador local | 59 verificaciones OK, sin errores |
+| 3. Escenario de interfaz | Flujos completos de la aplicación y generación de PDF (con datos simulados) | Navegador local | 60 verificaciones OK, sin errores |
 
 ---
 

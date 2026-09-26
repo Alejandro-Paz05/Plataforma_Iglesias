@@ -188,11 +188,17 @@
     chipMetodo('Efectivo').click();
     $('#filtros-reporte').requestSubmit();
     await hasta(function () { return $('#rep-descargar') && /Aportaciones en Efectivo(?! y)/.test($('#salida').textContent); }, 'reporte solo efectivo');
-    var soloEfectivo = metodosDelDetalle();
-    ok(soloEfectivo.length > 0 && soloEfectivo.every(function (m) { return m === 'Efectivo'; }),
-      'Reporte por método: solo Efectivo (' + soloEfectivo.length + ' aportaciones en el detalle)');
+    var filasTotales = $$('#salida tbody tr').map(function (tr) { return tr.cells[0].textContent.trim(); });
+    ok(filasTotales.length === 1 && filasTotales[0] === 'Efectivo' && metodosDelDetalle().length === 0,
+      'Reporte por método: solo Efectivo, sin detalle (casilla desmarcada)');
     $('#rep-descargar').click();
     await espera(300);
+    $('#r-detalle').checked = true;
+    $('#filtros-reporte').requestSubmit();
+    await hasta(function () { return metodosDelDetalle().length > 0; }, 'reporte efectivo con detalle');
+    var soloEfectivo = metodosDelDetalle();
+    ok(soloEfectivo.every(function (m) { return m === 'Efectivo'; }),
+      'Reporte por método: solo Efectivo con detalle (' + soloEfectivo.length + ' aportaciones)');
     chipMetodo('Cheque').click();
     $('#filtros-reporte').requestSubmit();
     await hasta(function () { return /Aportaciones en Efectivo y Cheque/.test($('#salida').textContent); }, 'reporte efectivo y cheque');
@@ -204,6 +210,7 @@
     await espera(300);
     chipMetodo('Efectivo').click();
     chipMetodo('Cheque').click();
+    $('#r-detalle').checked = false;
     $('[data-tipo="miembros_activos"]').click();
     await espera(30);
     $('#filtros-reporte').requestSubmit();
