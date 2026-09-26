@@ -17,7 +17,7 @@ const TIPOS = [
   { id: 'anual', texto: 'Aportaciones anuales', icono: 'bar-chart', filtros: ['anio', 'fondo', 'detalle'] },
   { id: 'miembro', texto: 'Por miembro', icono: 'users', filtros: ['desde', 'hasta', 'fondo'] },
   { id: 'fondo', texto: 'Por fondo', icono: 'layers', filtros: ['desde', 'hasta', 'detalle'] },
-  { id: 'metodo', texto: 'Por método de pago', icono: 'credit-card', filtros: ['desde', 'hasta', 'metodo', 'detalle'] },
+  { id: 'metodo', texto: 'Por método de pago', icono: 'credit-card', filtros: ['desde', 'hasta', 'metodos', 'detalle'] },
   { id: 'anuladas', texto: 'Anuladas y corregidas', icono: 'slash', filtros: ['desde', 'hasta'] },
   { id: 'miembros_activos', texto: 'Miembros activos', icono: 'user-check', filtros: ['tipoPersona'] },
   { id: 'miembros_inactivos', texto: 'Miembros inactivos', icono: 'user-x', filtros: ['tipoPersona'] },
@@ -25,7 +25,7 @@ const TIPOS = [
 
 const f = {
   tipo: 'dia', fecha: hoyISO(), desde: inicioMes(), hasta: hoyISO(), anio: anioActual(),
-  mes: Number(hoyISO().slice(5, 7)), fondo_id: '', metodo_pago_id: '', detalle: false, tipoPersona: '',
+  mes: Number(hoyISO().slice(5, 7)), fondo_id: '', metodo_pago_id: '', metodos: [], detalle: false, tipoPersona: '',
 };
 
 const NOTA_VALIDAS = 'Solo aportaciones válidas (se excluyen las anuladas y corregidas).';
@@ -67,9 +67,20 @@ export async function render({ cont, query, titulo }) {
       ${usa('mes') ? html`<div class="campo"><label for="r-mes">Mes</label><select id="r-mes" class="entrada">${opciones(MESES.map((m, i) => ({ valor: i + 1, texto: capitalizar(m) })), f.mes)}</select></div>` : ''}
       ${usa('fondo') ? html`<div class="campo"><label for="r-fondo">Fondo</label><select id="r-fondo" class="entrada">${opciones([{ valor: '', texto: 'Todos' }, ...estado.fondos.map((x) => ({ valor: x.id, texto: x.nombre }))], f.fondo_id)}</select></div>` : ''}
       ${usa('metodo') ? html`<div class="campo"><label for="r-metodo">Método</label><select id="r-metodo" class="entrada">${opciones([{ valor: '', texto: 'Todos' }, ...estado.metodos.map((x) => ({ valor: x.id, texto: x.nombre }))], f.metodo_pago_id)}</select></div>` : ''}
+      ${usa('metodos') ? html`<div class="campo ancho">
+        <label id="r-metodos-etiqueta">Métodos de pago <span class="texto-tenue">(sin marcar = todos)</span></label>
+        <div class="rapidos" id="r-metodos" role="group" aria-labelledby="r-metodos-etiqueta">
+          ${estado.metodos.map((x) => html`<button type="button" class="chip ${f.metodos.includes(x.id) ? 'activo' : ''}"
+            data-metodo="${x.id}" aria-pressed="${f.metodos.includes(x.id) ? 'true' : 'false'}">${x.nombre}</button>`)}
+        </div>
+      </div>` : ''}
       ${usa('tipoPersona') ? html`<div class="campo"><label for="r-tipo">Tipo de persona</label><select id="r-tipo" class="entrada">${opciones([{ valor: '', texto: 'Todos' }, ...['Miembro', 'Donante', 'Visitante', 'Otro'].map((x) => ({ valor: x, texto: x }))], f.tipoPersona)}</select></div>` : ''}
       ${usa('detalle') ? html`<div class="campo" style="flex:0 0 auto"><label class="casilla"><input type="checkbox" id="r-detalle" ${f.detalle ? 'checked' : ''}> Incluir detalle</label></div>` : ''}
       <div class="campo" style="flex:0 0 auto"><button type="submit" class="btn btn-primario">${icono('bar-chart')} Generar reporte</button></div>`);
+    $$('#r-metodos [data-metodo]', cont).forEach((b) => b.addEventListener('click', () => {
+      const activo = b.classList.toggle('activo');
+      b.setAttribute('aria-pressed', String(activo));
+    }));
   }
 
   pintarFiltros();
@@ -85,6 +96,7 @@ export async function render({ cont, query, titulo }) {
     if ($('#r-mes', form)) f.mes = Number(v('#r-mes'));
     f.fondo_id = $('#r-fondo', form) ? v('#r-fondo') : '';
     f.metodo_pago_id = $('#r-metodo', form) ? v('#r-metodo') : '';
+    if ($('#r-metodos', form)) f.metodos = $$('#r-metodos .chip.activo', form).map((b) => b.dataset.metodo);
     if ($('#r-tipo', form)) f.tipoPersona = v('#r-tipo');
     if ($('#r-detalle', form)) f.detalle = $('#r-detalle', form).checked;
 
@@ -120,6 +132,8 @@ async function aportaciones(filtros) {
 
 const nombreFondo = (id) => estado.fondos.find((x) => x.id === id)?.nombre;
 const nombreMetodo = (id) => estado.metodos.find((x) => x.id === id)?.nombre;
+// "Efectivo", "Efectivo y Cheque", "Efectivo, Cheque y Zelle"
+const unirNombres = (l) => (l.length < 2 ? l[0] || '' : `${l.slice(0, -1).join(', ')} y ${l[l.length - 1]}`);
 const sumar = (filas) => filas.reduce((s, x) => s + aCentavos(x.monto), 0);
 const pct = (c, total) => (total ? `${((c / total) * 100).toFixed(1)}%` : '0.0%');
 
@@ -264,28 +278,32 @@ async function construir(tipo) {
     case 'fondo':
     case 'metodo': {
       const porFondo = tipo.id === 'fondo';
-      // Un solo método (p. ej., solo Efectivo): el reporte incluye siempre su detalle.
-      const metodo = porFondo ? null : f.metodo_pago_id || null;
-      const filas = await aportaciones({ estado: 'REGISTRADA', desde: f.desde, hasta: f.hasta, metodo_pago_id: metodo });
+      // Métodos elegidos (p. ej., solo Efectivo y Cheque): el reporte incluye siempre su detalle.
+      const metodos = porFondo ? [] : f.metodos;
+      const nombres = metodos.map(nombreMetodo);
+      const todas = await aportaciones({
+        estado: 'REGISTRADA', desde: f.desde, hasta: f.hasta, metodo_pago_id: metodos.length === 1 ? metodos[0] : null,
+      });
+      const filas = metodos.length ? todas.filter((x) => metodos.includes(x.metodo_pago_id)) : todas;
       const total = sumar(filas);
       const grupos = porFondo
         ? agrupar(filas, (x) => x.fondo_id, (x) => x.fondo_nombre)
         : agrupar(filas, (x) => x.metodo_pago_id, (x) => x.metodo_pago_nombre);
       const secciones = [seccionAgrupada(porFondo ? 'Totales por fondo' : 'Totales por método de pago', porFondo ? 'Fondo' : 'Método', grupos, total)];
-      if (f.detalle || metodo) {
+      if (f.detalle || metodos.length) {
         for (const g of grupos) {
           const delGrupo = filas.filter((x) => (porFondo ? x.fondo_id : x.metodo_pago_id) === g.clave);
           secciones.push(seccionDetalle(delGrupo, `Detalle: ${g.etiqueta}`));
         }
       }
       return {
-        titulo: porFondo ? 'Aportaciones por fondo' : metodo ? `Aportaciones en ${nombreMetodo(metodo)}` : 'Aportaciones por método de pago',
-        subtitulo: [...(metodo ? [`Método: ${nombreMetodo(metodo)}`] : []), periodo, NOTA_VALIDAS].join(' · '),
+        titulo: porFondo ? 'Aportaciones por fondo' : metodos.length ? `Aportaciones en ${unirNombres(nombres)}` : 'Aportaciones por método de pago',
+        subtitulo: [...(metodos.length ? [`${metodos.length > 1 ? 'Métodos' : 'Método'}: ${nombres.join(', ')}`] : []), periodo, NOTA_VALIDAS].join(' · '),
         resumen: resumenBasico(filas),
-        horizontal: f.detalle || !!metodo,
+        horizontal: f.detalle || metodos.length > 0,
         secciones,
-        archivo: metodo
-          ? `reporte-${normalizarBusqueda(nombreMetodo(metodo)).replace(/[^a-z0-9]+/g, '-')}-${f.desde}-a-${f.hasta}`
+        archivo: metodos.length
+          ? `reporte-${normalizarBusqueda(nombres.join(' ')).replace(/[^a-z0-9]+/g, '-')}-${f.desde}-a-${f.hasta}`
           : `reporte-por-${tipo.id}-${f.desde}-a-${f.hasta}`,
       };
     }

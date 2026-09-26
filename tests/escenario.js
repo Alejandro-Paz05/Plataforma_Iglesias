@@ -180,17 +180,30 @@
     ok($('#salida').textContent.indexOf('Motivo') >= 0, 'Reporte de anuladas con motivo');
     $('[data-tipo="metodo"]').click();
     await espera(30);
-    var efectivo = $$('#r-metodo option').find(function (o) { return o.textContent === 'Efectivo'; });
-    escribir($('#r-metodo'), efectivo.value);
+    function chipMetodo(n) { return $$('#r-metodos [data-metodo]').find(function (b) { return b.textContent.trim() === n; }); }
+    function metodosDelDetalle() {
+      return $$('#salida tbody tr').filter(function (tr) { return tr.cells.length === 8; })
+        .map(function (tr) { return tr.cells[5].textContent.trim(); });
+    }
+    chipMetodo('Efectivo').click();
     $('#filtros-reporte').requestSubmit();
-    await hasta(function () { return $('#rep-descargar') && /Aportaciones en Efectivo/.test($('#salida').textContent); }, 'reporte solo efectivo');
-    var metodosDetalle = $$('#salida tbody tr').filter(function (tr) { return tr.cells.length === 8; })
-      .map(function (tr) { return tr.cells[5].textContent.trim(); });
-    ok(metodosDetalle.length > 0 && metodosDetalle.every(function (m) { return m === 'Efectivo'; }),
-      'Reporte por método: solo Efectivo (' + metodosDetalle.length + ' aportaciones en el detalle)');
+    await hasta(function () { return $('#rep-descargar') && /Aportaciones en Efectivo(?! y)/.test($('#salida').textContent); }, 'reporte solo efectivo');
+    var soloEfectivo = metodosDelDetalle();
+    ok(soloEfectivo.length > 0 && soloEfectivo.every(function (m) { return m === 'Efectivo'; }),
+      'Reporte por método: solo Efectivo (' + soloEfectivo.length + ' aportaciones en el detalle)');
     $('#rep-descargar').click();
     await espera(300);
-    escribir($('#r-metodo'), '');
+    chipMetodo('Cheque').click();
+    $('#filtros-reporte').requestSubmit();
+    await hasta(function () { return /Aportaciones en Efectivo y Cheque/.test($('#salida').textContent); }, 'reporte efectivo y cheque');
+    var dosMetodos = metodosDelDetalle();
+    ok(dosMetodos.indexOf('Efectivo') >= 0 && dosMetodos.indexOf('Cheque') >= 0
+      && dosMetodos.every(function (m) { return m === 'Efectivo' || m === 'Cheque'; }),
+      'Reporte por método: Efectivo y Cheque juntos (' + dosMetodos.length + ' aportaciones, sin otros métodos)');
+    $('#rep-descargar').click();
+    await espera(300);
+    chipMetodo('Efectivo').click();
+    chipMetodo('Cheque').click();
     $('[data-tipo="miembros_activos"]').click();
     await espera(30);
     $('#filtros-reporte').requestSubmit();

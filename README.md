@@ -170,7 +170,7 @@ Iniciar sesión → Inicio (indicadores) → Miembros/Donantes → Familias → 
 - **Estados de cuenta:** por miembro, por familia o de "Anónimo" y período, con vista previa, impresión y PDF.
 - **Cartas anuales:** individual o familiar (con texto editable) o **por lote** (un PDF con una carta por donante
   o familia), y **archivo privado** de copias en Storage.
-- **Reportes:** del día, por rango, mensual, anual, por miembro, por fondo, por método (todos o uno solo, p. ej. solo Efectivo), anuladas, miembros activos e
+- **Reportes:** del día, por rango, mensual, anual, por miembro, por fondo, por método (todos o solo los que elija, p. ej. Efectivo y Cheque), anuladas, miembros activos e
   inactivos; exportables a PDF y CSV (Excel).
 
 ---
