@@ -157,7 +157,8 @@
     $('[data-tab="lote"]').click();
     $('#form-lote').requestSubmit();
     await hasta(function () { return $('#l-pdf'); }, 'lote preparado');
-    ok($$('#l-resultado tbody tr').length >= 6, 'Lote: ' + $$('#l-resultado tbody tr').length + ' cartas preparadas');
+    var cartasLote = $$('#l-resultado tbody tr').length;
+    ok(cartasLote >= 6, 'Lote: ' + cartasLote + ' cartas preparadas');
     $('#l-pdf').click();
     await hasta(function () { return $('.visor-pdf'); }, 'visor lote', 20000);
     ok(true, 'Lote de cartas PDF generado');
@@ -218,7 +219,77 @@
     ok(true, 'Recibos por lote en PDF');
     await cerrarModal();
 
-    // 13. Configuración
+    // 13. Familias
+    function usd(c) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c / 100); }
+    function totalAnio(ids) {
+      return mock.aportaciones.filter(function (a) {
+        return ids.indexOf(a.miembro_id) >= 0 && a.estado === 'REGISTRADA' && a.fecha_aportacion.slice(0, 4) === mock.HOY.slice(0, 4);
+      }).reduce(function (s, a) { return s + Math.round(a.monto * 100); }, 0);
+    }
+    var maria = mock.miembros[1];
+    await ir('#/familias/nueva', '#form-familia');
+    escribir($('#c-nombre'), 'Familia Pérez');
+    $('#form-familia').requestSubmit();
+    await hasta(function () { return /^#\/familias\/[0-9a-f-]{36}$/.test(location.hash) && $('#agregar'); }, 'detalle de familia');
+    var idFamilia = location.hash.split('/')[2];
+    ok(/FAM-\d{6}/.test($('.cabecera .mono').textContent), 'Familia creada con número ' + $('.cabecera .mono').textContent);
+    await elegirMiembro('juan perez');
+    await hasta(function () { return $$('[data-quitar]').length === 1; }, 'Juan agregado');
+    await elegirMiembro('maria gonzalez');
+    await hasta(function () { return $$('[data-quitar]').length === 2; }, 'María agregada');
+    ok(juan.familia_id === idFamilia && maria.familia_id === idFamilia, 'Dos miembros agregados a la familia');
+    var dirigida = $('.datos dd strong').textContent;
+    ok(dirigida === 'Juan Pérez y María González', 'Carta dirigida a "' + dirigida + '"');
+    var esperado = usd(totalAnio([juan.id, maria.id]));
+    ok($('.indicador .valor').textContent === esperado, 'Total familiar del año = suma de ambos (' + esperado + ')');
+
+    await ir('#/cartas?familia=' + idFamilia + '&anio=' + mock.HOY.slice(0, 4), '#cuerpo');
+    ok($('#cuerpo').value.indexOf('Juan Pérez y María González') >= 0, 'Carta familiar: dirigida a la familia');
+    ok($('#carta tfoot').textContent.indexOf(esperado) >= 0, 'Carta familiar: total anual ' + esperado);
+    $('#descargar').click();
+    await espera(300);
+    ok(true, 'Carta familiar PDF generada');
+
+    $('[data-tab="lote"]').click();
+    $('#form-lote').requestSubmit();
+    await hasta(function () { return $('#l-pdf'); }, 'lote con familia');
+    var filasLote = $$('#l-resultado tbody tr');
+    ok(filasLote.length === cartasLote - 1 && filasLote.some(function (tr) { return /Familia · 2 personas/.test(tr.textContent); }),
+      'Lote: la familia recibe una sola carta (' + cartasLote + ' → ' + filasLote.length + ')');
+
+    await ir('#/cartas?miembro=' + juan.id + '&anio=' + mock.HOY.slice(0, 4), '#cuerpo');
+    await hasta(function () { return $('#carta .alerta.info'); }, 'aviso de carta conjunta');
+    ok(/carta conjunta/.test($('#carta .alerta.info').textContent), 'Carta individual avisa que la persona recibe carta conjunta');
+
+    await ir('#/estados-cuenta?familia=' + idFamilia, '.documento');
+    ok($('.documento thead').textContent.indexOf('Donante') >= 0 && $('.doc-total').textContent.indexOf(esperado) >= 0,
+      'Estado de cuenta familiar con columna Donante y total ' + esperado);
+    $('#descargar').click();
+    await espera(300);
+    ok(true, 'Estado de cuenta familiar PDF generado');
+
+    // Nuevo miembro creando su familia desde el formulario
+    await ir('#/miembros/nuevo', '#form-miembro');
+    escribir($('#c-nombre'), 'Ana');
+    escribir($('#c-apellido'), 'Sariñana');
+    escribir($('#c-familia_id'), '__nueva__');
+    var nombreFam = await hasta(function () { return $('#texto-solicitado'); }, 'nombre de familia nueva');
+    ok(nombreFam.value === 'Familia Sariñana', 'Nombre sugerido para la familia nueva: ' + nombreFam.value);
+    $('.modal [data-ok]').click();
+    await espera(40);
+    $('#form-miembro').requestSubmit();
+    await hasta(function () { return $('.cabecera h2') && /Ana Sariñana/.test($('.cabecera h2').textContent); }, 'miembro con familia nueva');
+    ok(/Familia Sariñana/.test($('.datos').textContent), 'Miembro creado dentro de la familia nueva "Familia Sariñana"');
+
+    // Eliminar la familia conserva a sus miembros
+    await ir('#/familias/' + idFamilia, '#eliminar');
+    $('#eliminar').click();
+    (await hasta(function () { return $('.modal [data-ok]'); }, 'confirmar eliminación')).click();
+    await hasta(function () { return location.hash === '#/familias'; }, 'familia eliminada');
+    ok(juan.familia_id === null && maria.familia_id === null && mock.miembros.indexOf(juan) >= 0,
+      'Al eliminar la familia, sus miembros se conservan sin familia');
+
+    // 14. Configuración
     await ir('#/configuracion', '#form-inst');
     escribir($('#i-ein'), '123');
     $('#form-inst').requestSubmit();

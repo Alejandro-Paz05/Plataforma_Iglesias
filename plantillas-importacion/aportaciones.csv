@@ -1,0 +1,4 @@
+﻿numero_anterior_miembro,fecha,monto,fondo,metodo_pago,referencia_pago,recibo_anterior,descripcion,bienes_servicios,valor_bienes,descripcion_bienes
+M-001,01/07/2024,150.00,Diezmo,Cheque,1045,R-2024-0001,,No,,
+M-001,01/14/2024,50.00,Ofrenda,Efectivo,,R-2024-0002,,No,,
+M-002,02/04/2024,500.00,Construcción,Zelle,,,Donación para el techo,Sí,25.00,Cena de recaudación

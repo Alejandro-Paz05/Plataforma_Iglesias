@@ -2,10 +2,12 @@
 import { sb } from '../supabase.js';
 import {
   html, pintar, $, $$, aviso, alerta, confirmar, mensajeError, palabrasBusqueda, retrasar, entero,
-  dinero, dineroCentavos, aCentavos, fecha, fechaHora, nombreCompleto, lineasDireccion, anioActual,
+  dinero, dineroCentavos, aCentavos, fecha, fechaHora, nombreCompleto, lineasDireccion, anioActual, solicitarTexto,
 } from '../utils.js';
 import { icono } from '../icons.js';
-import { insigniaEstado, insigniaActivo, montarPaginacion, opciones } from '../components.js';
+import { insigniaEstado, insigniaActivo, montarPaginacion, opciones, cargarFamilias, cargarFamilia } from '../components.js';
+
+const NUEVA_FAMILIA = '__nueva__';
 
 const TIPOS = ['Miembro', 'Donante', 'Visitante', 'Otro'];
 const TAMANO = 50;
@@ -105,9 +107,9 @@ export async function lista({ cont, titulo }) {
 // ---------------------------------------------------------------------
 // FORMULARIO (nuevo / editar)
 // ---------------------------------------------------------------------
-export async function formulario({ cont, params, titulo }) {
+export async function formulario({ cont, params, query, titulo }) {
   const id = params[0] || null;
-  let m = { tipo_persona: 'Miembro', activo: true };
+  let m = { tipo_persona: 'Miembro', activo: true, familia_id: query?.get('familia') || null };
   if (id) {
     const { data, error } = await sb.from('miembros').select('*').eq('id', id).maybeSingle();
     if (error) throw error;
@@ -117,6 +119,8 @@ export async function formulario({ cont, params, titulo }) {
     }
     m = data;
   }
+  const familias = await cargarFamilias();
+  let nombreFamiliaNueva = null;
   titulo(id ? 'Editar miembro' : 'Nuevo miembro');
 
   const campo = (clave, etiqueta, { tipo = 'text', requerido = false, max = 120, ayuda = '', extra = '' } = {}) => html`
@@ -150,6 +154,11 @@ export async function formulario({ cont, params, titulo }) {
               <select id="c-tipo_persona" name="tipo_persona" class="entrada">${opciones(TIPOS.map((t) => ({ valor: t, texto: t })), m.tipo_persona)}</select>
             </div>
             ${campo('fecha_ingreso', 'Fecha de ingreso', { tipo: 'date' })}
+          </div>
+          <div class="campo">
+            <label for="c-familia_id">Familia</label>
+            <select id="c-familia_id" name="familia_id" class="entrada">${opcionesFamilia(familias, m.familia_id)}</select>
+            <div class="ayuda">Opcional. Los miembros de una familia pueden recibir una sola carta anual conjunta.</div>
           </div>
         </div>
       </section>
@@ -187,6 +196,34 @@ export async function formulario({ cont, params, titulo }) {
   $('#c-nombre', cont).focus();
   const form = $('#form-miembro', cont);
 
+  // "Crear familia nueva…": se pide el nombre y se crea al guardar el miembro.
+  let familiaAnterior = m.familia_id || '';
+  const selFamilia = $('#c-familia_id', cont);
+  selFamilia.addEventListener('change', async () => {
+    if (selFamilia.value !== NUEVA_FAMILIA) {
+      familiaAnterior = selFamilia.value;
+      return;
+    }
+    const pendiente = solicitarTexto({
+      titulo: 'Nueva familia',
+      mensaje: html`<p>Se creará al guardar este miembro. Después podrá agregar a los demás integrantes desde <strong>Familias</strong>.</p>`,
+      etiqueta: 'Nombre de la familia',
+      minimo: 2,
+      textoConfirmar: 'Usar este nombre',
+    });
+    const apellido = $('#c-apellido', cont).value.trim();
+    const area = $('#texto-solicitado');
+    if (area && apellido) area.value = `Familia ${apellido}`;
+    const nombre = await pendiente;
+    if (!nombre) {
+      selFamilia.value = familiaAnterior;
+      return;
+    }
+    nombreFamiliaNueva = nombre;
+    selFamilia.querySelector(`option[value="${NUEVA_FAMILIA}"]`).textContent = `Nueva: ${nombre}`;
+    familiaAnterior = NUEVA_FAMILIA;
+  });
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const valor = (k) => {
@@ -205,6 +242,7 @@ export async function formulario({ cont, params, titulo }) {
       estado: valor('estado'),
       zip: valor('zip'),
       notas: valor('notas'),
+      familia_id: valor('familia_id'),
     };
     if (id) datos.activo = $('#c-activo', cont).checked;
 
@@ -241,6 +279,17 @@ export async function formulario({ cont, params, titulo }) {
     const boton = $('#guardar', cont);
     boton.disabled = true;
     boton.textContent = 'Guardando…';
+    if (datos.familia_id === NUEVA_FAMILIA) {
+      const { data: fam, error: errFam } = await sb.from('familias').insert({ nombre: nombreFamiliaNueva }).select('id').single();
+      if (errFam) {
+        boton.disabled = false;
+        pintar(boton, html`${icono('check')} Guardar`);
+        pintar($('#mensaje', cont), alerta('error', mensajeError(errFam)));
+        return;
+      }
+      datos.familia_id = fam.id;
+      selFamilia.replaceChildren(new Option(nombreFamiliaNueva, fam.id, true, true));
+    }
     const consulta = id
       ? sb.from('miembros').update(datos).eq('id', id).select('id, numero_miembro').single()
       : sb.from('miembros').insert(datos).select('id, numero_miembro').single();
@@ -273,6 +322,7 @@ export async function detalle({ cont, params, titulo }) {
     return;
   }
   titulo(nombreCompleto(m));
+  const familia = m.familia_id ? await cargarFamilia(m.familia_id) : null;
 
   const filas = historial.data.filas;
   const anio = anioActual();
@@ -309,6 +359,9 @@ export async function detalle({ cont, params, titulo }) {
       <dl class="datos">
         <div><dt>Teléfono</dt><dd>${m.telefono || '—'}</dd></div>
         <div><dt>Correo electrónico</dt><dd>${m.email || '—'}</dd></div>
+        <div><dt>Familia</dt><dd>${familia
+          ? html`<a href="#/familias/${familia.id}">${familia.nombre}</a> <span class="mono texto-tenue">${familia.numero_familia}</span>`
+          : html`— <a class="texto-pequeno" href="#/miembros/${m.id}/editar">Asignar</a>`}</dd></div>
         <div><dt>Dirección</dt><dd>${direccion.length ? direccion.map((l) => html`${l}<br>`) : '—'}</dd></div>
         <div><dt>Fecha de ingreso</dt><dd>${fecha(m.fecha_ingreso) || '—'}</dd></div>
         <div><dt>Registrado</dt><dd>${fechaHora(m.created_at)}</dd></div>
@@ -392,6 +445,14 @@ export async function detalle({ cont, params, titulo }) {
     aviso('Registro eliminado.');
     location.hash = '#/miembros';
   });
+}
+
+function opcionesFamilia(familias, seleccionada) {
+  return opciones([
+    { valor: '', texto: 'Sin familia' },
+    ...familias.map((f) => ({ valor: f.id, texto: `${f.nombre} (${f.numero_familia})` })),
+    { valor: NUEVA_FAMILIA, texto: '+ Crear familia nueva…' },
+  ], seleccionada || '');
 }
 
 function tarjetaDato(etiqueta, valor) {

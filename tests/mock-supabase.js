@@ -35,6 +35,7 @@
       telefono: '(305) 555-01' + String(i).padStart(2, '0'), email: normal(p[0]) + '@ejemplo.com',
       fecha_ingreso: '2019-0' + (1 + (i % 9)) + '-15', tipo_persona: i === 7 ? 'Donante' : 'Miembro', activo: i !== 6,
       notas: i === 0 ? 'Diácono' : null, created_at: ahora(), updated_at: ahora(), created_by: USUARIO.id, updated_by: null,
+      familia_id: null,
     };
     m.texto_busqueda = busqueda(m);
     return m;
@@ -104,8 +105,9 @@
       descripcion: 'Miembro EBE-000001 — Juan Pérez', datos_anteriores: null, datos_nuevos: { nombre: 'Juan', apellido: 'Pérez' }, fecha_hora: ahora() },
   ];
 
+  var familias = [];
   var TABLAS = { fondos: fondos, metodos_pago: metodos, miembros: miembros, aportaciones: aportaciones, configuracion_iglesia: [config],
-    administradores: administradores, bitacora: bitacora };
+    administradores: administradores, bitacora: bitacora, familias: familias };
 
   function porId(lista, id) { return lista.find(function (x) { return x.id === id; }); }
   function fila(a) {
@@ -114,6 +116,7 @@
     var c = a.corregida_por_id ? porId(aportaciones, a.corregida_por_id) : null;
     return Object.assign({}, a, {
       numero_miembro: m.numero_miembro, miembro_nombre: m.nombre, miembro_apellido: m.apellido, miembro_busqueda: m.texto_busqueda,
+      familia_id: m.familia_id || null,
       fondo_nombre: fo.nombre, metodo_pago_nombre: me.nombre, corrige_numero_recibo: o ? o.numero_recibo : null,
       corregida_por_numero_recibo: c ? c.numero_recibo : null, creado_por_email: USUARIO.email,
       anulada_por_email: a.anulada_by ? USUARIO.email : null,
@@ -161,10 +164,14 @@
       var d = this.datos; var nuevo;
       if (t === 'aportaciones') nuevo = nuevaAportacion(d);
       else if (t === 'miembros') {
-        nuevo = Object.assign({ id: nuevoId(), activo: true, created_at: ahora(), updated_at: ahora() }, d,
+        nuevo = Object.assign({ id: nuevoId(), activo: true, familia_id: null, created_at: ahora(), updated_at: ahora() }, d,
           { numero_miembro: 'EBE-' + String(miembros.length + 1).padStart(6, '0') });
         nuevo.texto_busqueda = busqueda(nuevo);
         miembros.push(nuevo);
+      } else if (t === 'familias') {
+        nuevo = Object.assign({ id: nuevoId(), nombre_carta: null, carta_conjunta: true, notas: null, created_at: ahora(), updated_at: ahora() }, d,
+          { numero_familia: 'FAM-' + String(familias.length + 1).padStart(6, '0') });
+        familias.push(nuevo);
       } else { nuevo = Object.assign({ id: nuevoId(), created_at: ahora(), updated_at: ahora() }, d); TABLAS[t].push(nuevo); }
       return { data: this.unico ? Object.assign({}, nuevo) : [nuevo], error: null };
     }
@@ -175,7 +182,11 @@
       return { data: this.unico ? filas[0] : filas, error: null };
     }
     if (this.modo === 'delete') {
-      filas.forEach(function (r) { TABLAS[t].splice(TABLAS[t].indexOf(r), 1); });
+      filas.forEach(function (r) {
+        TABLAS[t].splice(TABLAS[t].indexOf(r), 1);
+        // on delete set null
+        if (t === 'familias') miembros.forEach(function (m) { if (m.familia_id === r.id) m.familia_id = null; });
+      });
       return { data: null, error: null };
     }
     this.ordenes.slice().reverse().forEach(function (o) {
@@ -198,6 +209,7 @@
       if (f.fondo_id && v.fondo_id !== f.fondo_id) return false;
       if (f.metodo_pago_id && v.metodo_pago_id !== f.metodo_pago_id) return false;
       if (f.miembro_id && v.miembro_id !== f.miembro_id) return false;
+      if (f.familia_id && v.familia_id !== f.familia_id) return false;
       var e = f.estado || 'TODAS';
       if (e === 'NO_VALIDAS' && v.estado === 'REGISTRADA') return false;
       if (e !== 'TODAS' && e !== 'NO_VALIDAS' && v.estado !== e) return false;

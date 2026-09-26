@@ -1,0 +1,3 @@
+﻿numero_anterior,nombre,apellido,familia,tipo_persona,direccion,ciudad,estado,zip,telefono,email,fecha_ingreso,activo,notas
+M-001,María (EJEMPLO),Núñez,Familia Núñez,Miembro,123 Main St,Orlando,FL,32801,(407) 555-0101,maria@ejemplo.com,03/15/2018,Sí,
+M-002,José (EJEMPLO),Pérez,,Donante,,,,,(407) 555-0102,,,No,Se mudó en 2023

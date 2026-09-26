@@ -12,6 +12,7 @@ const MENU = [
     seccion: 'Registro',
     items: [
       { ruta: 'miembros', texto: 'Miembros / Donantes', icono: 'users' },
+      { ruta: 'familias', texto: 'Familias', icono: 'heart' },
       { ruta: 'aportaciones/nueva', texto: 'Nueva aportación', icono: 'plus-circle' },
       { ruta: 'aportaciones', texto: 'Historial de aportaciones', icono: 'list' },
     ],
@@ -45,6 +46,10 @@ const RUTAS = [
   { patron: /^miembros\/nuevo$/, modulo: vista('miembros'), fn: 'formulario', menu: 'miembros' },
   { patron: new RegExp(`^miembros/${UUID}$`), modulo: vista('miembros'), fn: 'detalle', menu: 'miembros' },
   { patron: new RegExp(`^miembros/${UUID}/editar$`), modulo: vista('miembros'), fn: 'formulario', menu: 'miembros' },
+  { patron: /^familias$/, modulo: vista('familias'), fn: 'lista', menu: 'familias' },
+  { patron: /^familias\/nueva$/, modulo: vista('familias'), fn: 'formulario', menu: 'familias' },
+  { patron: new RegExp(`^familias/${UUID}$`), modulo: vista('familias'), fn: 'detalle', menu: 'familias' },
+  { patron: new RegExp(`^familias/${UUID}/editar$`), modulo: vista('familias'), fn: 'formulario', menu: 'familias' },
   { patron: /^aportaciones\/nueva$/, modulo: vista('aportacion-nueva'), menu: 'aportaciones/nueva' },
   { patron: /^aportaciones$/, modulo: vista('aportaciones'), fn: 'lista', menu: 'aportaciones' },
   { patron: new RegExp(`^aportaciones/${UUID}$`), modulo: vista('aportaciones'), fn: 'detalle', menu: 'aportaciones' },

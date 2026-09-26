@@ -46,6 +46,7 @@ const MIGRACIONES = [
   '20260922000400_seguridad_rls.sql',
   '20260922000500_datos_iniciales.sql',
   '20260922000600_storage.sql',
+  '20260922000700_familias.sql',
 ];
 
 async function texto(ruta) {
@@ -76,15 +77,21 @@ async function texto(ruta) {
       }
     }
 
-    const resultado = await db.exec(await texto('../supabase/pruebas/verificacion_fase1.sql'));
-    const filas = resultado[resultado.length - 1].rows;
-    let fallos = 0;
-    log('\n=== VERIFICACIÓN FASE 1 ===');
-    for (const r of filas) {
-      if (r.resultado !== 'OK') fallos++;
-      log(`${String(r.n).padStart(2)}. [${r.resultado}] ${r.prueba}${r.detalle ? ' — ' + r.detalle : ''}`);
+    const verificaciones = [
+      ['FASE 1', '../supabase/pruebas/verificacion_fase1.sql'],
+      ['FAMILIAS', '../supabase/pruebas/verificacion_familias.sql'],
+    ];
+    for (const [nombre, archivo] of verificaciones) {
+      const resultado = await db.exec(await texto(archivo));
+      const filas = resultado[resultado.length - 1].rows;
+      let fallos = 0;
+      log(`\n=== VERIFICACIÓN ${nombre} ===`);
+      for (const r of filas) {
+        if (r.resultado !== 'OK') fallos++;
+        log(`${String(r.n).padStart(2)}. [${r.resultado}] ${r.prueba}${r.detalle ? ' — ' + r.detalle : ''}`);
+      }
+      log(`\nTotal ${nombre}: ${filas.length} pruebas · ${filas.length - fallos} OK · ${fallos} con fallo`);
     }
-    log(`\nTotal: ${filas.length} pruebas · ${filas.length - fallos} OK · ${fallos} con fallo`);
 
     // Alta de SUPER ADMIN (flujo del README)
     await db.exec(`insert into auth.users (id, email, aud, role) values (gen_random_uuid(), 'pastor@ebenezer.org', 'authenticated', 'authenticated');`);
@@ -96,6 +103,7 @@ async function texto(ruta) {
     // La verificación no debe dejar datos
     const residuos = await db.query(`select (select count(*) from public.miembros)::int as miembros,
       (select count(*) from public.aportaciones)::int as aportaciones,
+      (select count(*) from public.familias)::int as familias,
       (select count(*) from public.contadores)::int as contadores`);
     log('Datos residuales tras la verificación: ' + JSON.stringify(residuos.rows[0]));
     log('FIN');

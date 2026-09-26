@@ -5,9 +5,9 @@ en la base de datos) ejecute al menos el **nivel 1** en el proyecto de Supabase.
 
 | Nivel | Qué verifica | Dónde se ejecuta | Resultado esperado |
 |---|---|---|---|
-| 1. Verificación SQL | Integridad financiera, numeración, anulación/corrección, inmutabilidad, bitácora, RLS | SQL Editor de Supabase | 60 pruebas **OK** |
-| 2. Migraciones en PGlite | Que las migraciones se instalan en PostgreSQL limpio y pasan la verificación | Navegador local | 6 migraciones OK + 60 pruebas OK |
-| 3. Escenario de interfaz | Flujos completos de la aplicación y generación de PDF (con datos simulados) | Navegador local | 33 verificaciones OK, sin errores |
+| 1. Verificación SQL | Integridad financiera, numeración, anulación/corrección, inmutabilidad, bitácora, RLS, familias | SQL Editor de Supabase | 60 + 17 pruebas **OK** |
+| 2. Migraciones en PGlite | Que las migraciones se instalan en PostgreSQL limpio y pasan la verificación | Navegador local | 7 migraciones OK + 60 + 17 pruebas OK |
+| 3. Escenario de interfaz | Flujos completos de la aplicación y generación de PDF (con datos simulados) | Navegador local | 47 verificaciones OK, sin errores |
 
 ---
 
@@ -16,6 +16,7 @@ en la base de datos) ejecute al menos el **nivel 1** en el proyecto de Supabase.
 1. Abra Supabase → **SQL Editor** → *New query*.
 2. Pegue el contenido completo de `supabase/pruebas/verificacion_fase1.sql` y pulse **Run**.
 3. El resultado es una tabla: **todas** las filas deben decir `OK`.
+4. Repita con `supabase/pruebas/verificacion_familias.sql` (17 pruebas).
 
 La verificación crea usuarios, miembros y aportaciones de prueba **dentro de una subtransacción que se revierte**:
 no deja datos, no consume números de recibo ni de miembro y no deja registros en la bitácora.
@@ -51,8 +52,8 @@ Con el servidor local activo, abra:
 Marque cada punto después de instalar. Antes de avanzar a la siguiente fase, confirme que la anterior está completa.
 
 ### Fase 1 — Base de datos y seguridad
-- [ ] Las 6 migraciones (o `instalacion_completa.sql`) se ejecutaron sin errores.
-- [ ] `verificacion_fase1.sql` → todas las pruebas **OK**.
+- [ ] Las 7 migraciones (o `instalacion_completa.sql`) se ejecutaron sin errores.
+- [ ] `verificacion_fase1.sql` y `verificacion_familias.sql` → todas las pruebas **OK**.
 - [ ] *Table Editor*: cada tabla muestra el indicador de **RLS habilitado**.
 - [ ] *Storage*: existen los buckets `institucional` (público) y `documentos` (privado).
 
@@ -72,6 +73,13 @@ Marque cada punto después de instalar. Antes de avanzar a la siguiente fase, co
 - [ ] Al crear un miembro se asigna `EBE-000001`, `EBE-000002`, … automáticamente.
 - [ ] La búsqueda funciona por número, nombre, apellido (con o sin acentos), teléfono y email.
 - [ ] Un miembro con aportaciones **no** puede eliminarse; sí puede desactivarse.
+
+### Fase 4b — Familias
+- [ ] Al crear una familia se asigna `FAM-000001`, `FAM-000002`, … automáticamente.
+- [ ] Se pueden agregar y quitar miembros (desde la familia o desde el formulario del miembro).
+- [ ] La carta anual familiar suma las aportaciones válidas de todos sus miembros.
+- [ ] En el lote, una familia con carta conjunta recibe una sola carta; sin carta conjunta, una por persona.
+- [ ] Eliminar una familia conserva a sus miembros y sus aportaciones.
 
 ### Fase 5 — Fondos y métodos de pago
 - [ ] Se pueden crear, editar y desactivar.

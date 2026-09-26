@@ -1,0 +1,48 @@
+PLANTILLAS PARA IMPORTAR DATOS ANTIGUOS
+Sistema de Administración de Aportaciones - Centro Evangelístico Ebenezer
+
+Llene estos dos archivos (se pueden abrir y guardar con Excel como "CSV UTF-8").
+Las filas marcadas "(EJEMPLO)" son solo de muestra: bórrelas antes de enviar.
+Si solo tiene la lista de miembros, envíe solo miembros.csv.
+
+----------------------------------------------------------------------
+miembros.csv  (una fila por persona)
+----------------------------------------------------------------------
+numero_anterior   Número o código que tenía la persona en el sistema viejo.
+                  OBLIGATORIO si también envía aportaciones: se usa para
+                  saber de quién es cada aportación. El sistema nuevo asigna
+                  su propio número (EBE-000001...); el anterior se guarda en notas.
+nombre            OBLIGATORIO
+apellido          OBLIGATORIO
+familia           Opcional. Nombre de la familia (ej.: Familia Sariñana). Las
+                  personas con el mismo nombre de familia quedan agrupadas
+                  y pueden recibir una sola carta anual conjunta.
+tipo_persona      Miembro, Donante, Visitante u Otro (si se deja vacío: Miembro)
+direccion, ciudad, estado, zip, telefono, email   Opcionales
+fecha_ingreso     MM/DD/AAAA (opcional)
+activo            Sí o No (si se deja vacío: Sí)
+notas             Opcional
+
+----------------------------------------------------------------------
+aportaciones.csv  (una fila por aportación)
+----------------------------------------------------------------------
+numero_anterior_miembro  OBLIGATORIO. El mismo código de miembros.csv.
+fecha             OBLIGATORIO. MM/DD/AAAA, desde 01/01/2000 hasta hoy.
+monto             OBLIGATORIO. Mayor que 0, máximo 2 decimales (ej.: 150.00).
+fondo             OBLIGATORIO. Uno de: Diezmo, Ofrenda, Misiones, Construcción,
+                  Fondo General, Otros. (Si usan otros nombres, avise: se
+                  pueden crear antes de importar.)
+metodo_pago       OBLIGATORIO. Uno de: Efectivo, Cheque, Zelle, ACH,
+                  Transferencia bancaria, Tarjeta, Otro.
+referencia_pago   Opcional (número de cheque, confirmación de Zelle, etc.)
+recibo_anterior   Opcional. Número de recibo del sistema viejo; se conserva
+                  en la descripción. El sistema nuevo asigna EBE-AAAA-000001...
+descripcion       Opcional
+bienes_servicios  Sí o No. "Sí" solo si el donante recibió algo a cambio
+                  (una cena, un artículo...). Si se deja vacío: No.
+valor_bienes      Solo si bienes_servicios = Sí: valor de lo recibido
+                  (entre 0 y el monto).
+descripcion_bienes  Solo si bienes_servicios = Sí: qué recibió.
+
+IMPORTANTE: estos archivos contienen datos personales y financieros.
+Envíelos por un medio privado (no por correo sin cifrar ni por redes sociales).

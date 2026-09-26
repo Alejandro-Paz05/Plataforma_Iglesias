@@ -6,24 +6,28 @@ import {
   hoyISO, inicioAnio, anioActual, nombreCompleto, lineasDireccion, capitalizar,
 } from '../utils.js';
 import { icono } from '../icons.js';
-import { selectorMiembro, cargarMiembro, insigniaEstado } from '../components.js';
+import {
+  selectorMiembro, cargarMiembro, insigniaEstado, cargarFamilias, camposDestinatario, enlazarDestinatario,
+  cargarDestinatarioFamilia,
+} from '../components.js';
 import { pdfEstadoCuenta, mostrarPDF, descargarPDF } from '../pdf.js';
 import { urlLogo } from '../app.js';
 
 export async function render({ cont, query, titulo }) {
   titulo('Estados de cuenta');
-  const miembroInicial = query.get('miembro') ? await cargarMiembro(query.get('miembro')) : null;
+  const [miembroInicial, familias] = await Promise.all([
+    query.get('miembro') ? cargarMiembro(query.get('miembro')) : null,
+    cargarFamilias(),
+  ]);
+  const familiaInicial = familias.find((f) => f.id === query.get('familia')) || null;
   const hoy = hoyISO();
 
   pintar(cont, html`
     <div class="cabecera">
-      <div><h2>Estado de cuenta</h2><p>Detalle de aportaciones de un miembro o donante en un período.</p></div>
+      <div><h2>Estado de cuenta</h2><p>Detalle de aportaciones de un miembro, donante o familia en un período.</p></div>
     </div>
     <form class="tarjeta formulario no-imprimir" id="form-estado" novalidate>
-      <div class="campo">
-        <label class="requerido" for="selector-miembro">Miembro / donante</label>
-        <div id="miembro"></div>
-      </div>
+      ${camposDestinatario(familias, familiaInicial)}
       <div class="fila-campos">
         <div class="campo"><label class="requerido" for="desde">Fecha inicial</label>
           <input id="desde" class="entrada" type="date" value="${inicioAnio()}"></div>
@@ -42,6 +46,7 @@ export async function render({ cont, query, titulo }) {
     <div id="resultado" class="mt-2"></div>`);
 
   const selector = selectorMiembro($('#miembro', cont), { inicial: miembroInicial, soloActivos: false });
+  const destinatarioElegido = enlazarDestinatario(cont);
   cont.querySelectorAll('[data-periodo]').forEach((b) => b.addEventListener('click', () => {
     const a = anioActual();
     const p = {
@@ -55,11 +60,13 @@ export async function render({ cont, query, titulo }) {
 
   $('#form-estado', cont).addEventListener('submit', async (e) => {
     e.preventDefault();
-    const m = selector.obtener();
+    const { esFamilia, familiaId } = destinatarioElegido();
+    let m = esFamilia ? null : selector.obtener();
     const desde = $('#desde', cont).value;
     const hasta = $('#hasta', cont).value;
     const errores = [];
-    if (!m) errores.push('Seleccione el miembro o donante.');
+    if (esFamilia && !familiaId) errores.push('Seleccione la familia.');
+    if (!esFamilia && !m) errores.push('Seleccione el miembro o donante.');
     if (!fechaValida(desde) || !fechaValida(hasta)) errores.push('Indique fechas válidas.');
     else if (desde > hasta) errores.push('La fecha inicial no puede ser posterior a la final.');
     if (errores.length) {
@@ -67,16 +74,27 @@ export async function render({ cont, query, titulo }) {
       return;
     }
     pintar($('#mensaje', cont), '');
+    if (esFamilia) {
+      try {
+        m = await cargarDestinatarioFamilia(familiaId);
+      } catch (err) {
+        pintar($('#resultado', cont), alerta('error', mensajeError(err)));
+        return;
+      }
+    }
     await consultar($('#resultado', cont), m, desde, hasta, $('#incluir-anuladas', cont).checked);
   });
 
-  if (miembroInicial) $('#form-estado', cont).requestSubmit();
+  if (miembroInicial || familiaInicial) $('#form-estado', cont).requestSubmit();
 }
 
 async function consultar(el, miembro, desde, hasta, incluirNoValidas) {
   el.style.opacity = '.6';
   const { data, error } = await sb.rpc('buscar_aportaciones', {
-    p_filtros: { miembro_id: miembro.id, desde, hasta, estado: incluirNoValidas ? 'TODAS' : 'REGISTRADA' },
+    p_filtros: {
+      ...(miembro.es_familia ? { familia_id: miembro.id } : { miembro_id: miembro.id }),
+      desde, hasta, estado: incluirNoValidas ? 'TODAS' : 'REGISTRADA',
+    },
     p_limite: 50000, p_desplazamiento: 0, p_orden: 'fecha_asc',
   });
   el.style.opacity = '';
@@ -96,6 +114,8 @@ async function consultar(el, miembro, desde, hasta, incluirNoValidas) {
   }
   const resumenFondos = [...porFondo.values()].sort((a, b) => b.centavos - a.centavos);
   const cfg = estado.config;
+  const familiar = !!miembro.es_familia;
+  const columnas = 5 + (incluirNoValidas ? 1 : 0) + (familiar ? 1 : 0);
   const datosInst = [cfg.direccion, [cfg.ciudad, [cfg.estado, cfg.zip].filter(Boolean).join(' ')].filter(Boolean).join(', '),
     cfg.telefono, cfg.email].filter(Boolean).join(' · ');
 
@@ -116,24 +136,26 @@ async function consultar(el, miembro, desde, hasta, incluirNoValidas) {
       </div>
       <div class="doc-titulo">Estado de cuenta de aportaciones</div>
       <dl class="datos mb-2">
-        <div><dt>Miembro / donante</dt><dd><strong>${nombreCompleto(miembro)}</strong></dd></div>
-        <div><dt>Número de miembro</dt><dd class="mono">${miembro.numero_miembro}</dd></div>
+        <div><dt>${familiar ? 'Familia' : 'Miembro / donante'}</dt><dd><strong>${nombreCompleto(miembro)}</strong></dd></div>
+        <div><dt>${familiar ? 'Número de familia' : 'Número de miembro'}</dt><dd class="mono">${miembro.numero_miembro}</dd></div>
+        ${familiar ? html`<div style="grid-column:1/-1"><dt>Miembros</dt><dd>${miembro.miembros.map((x) => `${x.numero_miembro} ${nombreCompleto(x)}`).join(' · ')}</dd></div>` : ''}
         <div><dt>Dirección</dt><dd>${lineasDireccion(miembro).join(', ') || '—'}</dd></div>
         <div><dt>Período consultado</dt><dd>${fecha(desde)} al ${fecha(hasta)}</dd></div>
       </dl>
       <div class="tabla-contenedor">
         <table class="tabla tabla-compacta">
-          <thead><tr><th>Fecha</th><th>No. recibo</th><th>Fondo</th><th>Método</th>${incluirNoValidas ? html`<th>Estado</th>` : ''}<th class="dinero">Monto</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>No. recibo</th>${familiar ? html`<th>Donante</th>` : ''}<th>Fondo</th><th>Método</th>${incluirNoValidas ? html`<th>Estado</th>` : ''}<th class="dinero">Monto</th></tr></thead>
           <tbody>
             ${filas.length ? filas.map((f) => html`
               <tr class="${f.estado !== 'REGISTRADA' ? 'tenue' : ''}">
                 <td class="nowrap">${fecha(f.fecha_aportacion)}</td>
                 <td class="mono nowrap">${f.numero_recibo}</td>
+                ${familiar ? html`<td>${f.miembro_nombre} ${f.miembro_apellido}</td>` : ''}
                 <td>${f.fondo_nombre}</td>
                 <td>${f.metodo_pago_nombre}</td>
                 ${incluirNoValidas ? html`<td>${insigniaEstado(f.estado)}</td>` : ''}
                 <td class="dinero ${f.estado !== 'REGISTRADA' ? 'tachado' : ''}">${dinero(f.monto)}</td>
-              </tr>`) : html`<tr><td colspan="${incluirNoValidas ? 6 : 5}" class="tabla-vacia">No hay aportaciones en el período seleccionado.</td></tr>`}
+              </tr>`) : html`<tr><td colspan="${columnas}" class="tabla-vacia">No hay aportaciones en el período seleccionado.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -153,7 +175,7 @@ async function consultar(el, miembro, desde, hasta, incluirNoValidas) {
   const generar = async () => {
     const doc = await pdfEstadoCuenta({ miembro, desde, hasta, filas, incluirNoValidas, resumenFondos, totalCentavos });
     registrarEvento('GENERAR_ESTADO_CUENTA', {
-      tabla: 'miembros', registroId: miembro.id,
+      tabla: familiar ? 'familias' : 'miembros', registroId: miembro.id,
       descripcion: `Estado de cuenta ${miembro.numero_miembro} — ${capitalizar(nombreCompleto(miembro))} (${fecha(desde)} al ${fecha(hasta)})`,
     });
     return doc;

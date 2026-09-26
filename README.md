@@ -42,8 +42,9 @@ js/pdf.js                  Recibos, estados de cuenta, cartas y reportes en PDF
 js/views/*.js              Pantallas (inicio, miembros, aportaciones, recibos, …)
 vendor/                    Librerías locales: supabase-js 2.117.0, jsPDF 4.2.1, AutoTable 5.0.8
 supabase/migrations/       Migraciones SQL por orden (FASE 1)
-supabase/instalacion_completa.sql   Las 6 migraciones en un solo archivo
+supabase/instalacion_completa.sql   Las 7 migraciones en un solo archivo
 supabase/pruebas/verificacion_fase1.sql   Verificación automática (60 pruebas)
+supabase/pruebas/verificacion_familias.sql   Verificación de familias (17 pruebas)
 scripts/                   Respaldo técnico, preparación de publicación, generador del SQL
 docs/RESPALDOS.md          Política de respaldo y recuperación
 docs/PRUEBAS.md            Pruebas y lista de verificación por fase
@@ -65,8 +66,13 @@ servidor-local.ps1         Servidor para probar en este equipo
 
 1. Supabase → **SQL Editor** → *New query*.
 2. Pegue **todo** el contenido de `supabase/instalacion_completa.sql` y pulse **Run** (una sola vez).
-   *Alternativa:* ejecutar los 6 archivos de `supabase/migrations/` en orden, o `supabase db push` con la CLI.
+   *Alternativa:* ejecutar los 7 archivos de `supabase/migrations/` en orden, o `supabase db push` con la CLI.
 3. Verifique: pegue `supabase/pruebas/verificacion_fase1.sql` y pulse **Run**. **Las 60 pruebas deben decir OK.**
+   Después pegue `supabase/pruebas/verificacion_familias.sql` y pulse **Run**: **las 17 pruebas deben decir OK.**
+
+> **¿Ya tenía instalada la versión anterior (sin familias)?** No vuelva a ejecutar `instalacion_completa.sql`.
+> Pegue solo `supabase/migrations/20260922000700_familias.sql` en el SQL Editor, pulse **Run** una vez y
+> luego ejecute `verificacion_familias.sql`. No modifica ni borra los datos existentes.
 
 Esto crea las tablas, restricciones, numeración segura, triggers de integridad, bitácora, políticas RLS,
 fondos y métodos iniciales, configuración inicial y los buckets de Storage.
@@ -137,7 +143,7 @@ los módulos de JavaScript requieren un servidor.)
 ## 3. Uso diario
 
 ```
-Iniciar sesión → Inicio (indicadores) → Miembros/Donantes → Nueva aportación → Recibo
+Iniciar sesión → Inicio (indicadores) → Miembros/Donantes → Familias → Nueva aportación → Recibo
               → Estados de cuenta → Cartas anuales → Reportes → Bitácora
 ```
 
@@ -146,9 +152,13 @@ Iniciar sesión → Inicio (indicadores) → Miembros/Donantes → Nueva aportac
   **VER RECIBO · GENERAR PDF · NUEVA APORTACIÓN**. La fecha, el fondo y el método se recuerdan para capturas en lote.
 - **Historial:** filtros por recibo, miembro, fechas, fondo, método y estado; totales válidos; exportación CSV.
 - **Recibos:** individuales o todos los listados en un solo PDF (útil después de cada servicio).
-- **Estados de cuenta:** por miembro y período, con vista previa, impresión y PDF.
-- **Cartas anuales:** individual (con texto editable) o **por lote** (un PDF con una carta por donante), y
-  **archivo privado** de copias en Storage.
+- **Familias:** agrupan a varias personas (por ejemplo, un matrimonio). Cada aportación sigue registrada a nombre
+  de quien la dio; la familia solo las reúne para los documentos. Se crean en *Familias → Nueva familia* o desde el
+  formulario del miembro (*Familia → + Crear familia nueva…*). Si la familia tiene **carta conjunta**, el lote de
+  cartas genera una sola carta con el total de todos sus miembros.
+- **Estados de cuenta:** por miembro o por familia y período, con vista previa, impresión y PDF.
+- **Cartas anuales:** individual o familiar (con texto editable) o **por lote** (un PDF con una carta por donante
+  o familia), y **archivo privado** de copias en Storage.
 - **Reportes:** del día, por rango, mensual, anual, por miembro, por fondo, por método, anuladas, miembros activos e
   inactivos; exportables a PDF y CSV (Excel).
 
@@ -232,6 +242,7 @@ Resumen (detalle en **`docs/RESPALDOS.md`**):
 Detalle en **`docs/PRUEBAS.md`**. En resumen:
 
 - `supabase/pruebas/verificacion_fase1.sql` → 60 pruebas automáticas de integridad y seguridad (no deja datos).
+- `supabase/pruebas/verificacion_familias.sql` → 17 pruebas de familias (no deja datos).
 - `tests/sql-pglite.html` → instala las migraciones en PostgreSQL local (PGlite) y ejecuta la verificación.
 - `tests/escenario.html` → recorre los flujos de la interfaz con datos simulados y genera los PDF.
 

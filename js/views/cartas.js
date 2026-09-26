@@ -6,7 +6,10 @@ import {
   anioActual, nombreCompleto, obtenerTodos, descargarCSV, descargarBlob, marcaArchivo,
 } from '../utils.js';
 import { icono } from '../icons.js';
-import { selectorMiembro, cargarMiembro, opciones, COLUMNAS_MIEMBRO } from '../components.js';
+import {
+  selectorMiembro, cargarMiembro, opciones, COLUMNAS_MIEMBRO, cargarFamilias, cargarFamilia, destinatarioFamilia,
+  camposDestinatario, enlazarDestinatario, cargarDestinatarioFamilia,
+} from '../components.js';
 import { pdfCartaAnual, pdfCartasLote, mostrarPDF, descargarPDF } from '../pdf.js';
 
 const PLANTILLAS = [
@@ -102,21 +105,22 @@ export async function render({ cont, query, titulo }) {
     $('#tab-lote', cont).hidden = b.dataset.tab !== 'lote';
   }));
 
-  const miembroInicial = query.get('miembro') ? await cargarMiembro(query.get('miembro')) : null;
-  individual($('#tab-individual', cont), miembroInicial, Number(query.get('anio')) || anioPredeterminado());
+  const [miembroInicial, familias] = await Promise.all([
+    query.get('miembro') ? cargarMiembro(query.get('miembro')) : null,
+    cargarFamilias(),
+  ]);
+  const familiaInicial = familias.find((f) => f.id === query.get('familia')) || null;
+  individual($('#tab-individual', cont), { miembroInicial, familiaInicial, familias }, Number(query.get('anio')) || anioPredeterminado());
   lote($('#tab-lote', cont));
 }
 
 // ---------------------------------------------------------------------
 // Carta individual
 // ---------------------------------------------------------------------
-function individual(el, miembroInicial, anioInicial) {
+function individual(el, { miembroInicial, familiaInicial, familias }, anioInicial) {
   pintar(el, html`
     <form class="tarjeta formulario" id="form-carta" novalidate>
-      <div class="campo">
-        <label class="requerido" for="selector-miembro">Miembro / donante</label>
-        <div id="miembro"></div>
-      </div>
+      ${camposDestinatario(familias, familiaInicial)}
       <div class="fila-campos">
         <div class="campo"><label for="anio">Año</label><select id="anio" class="entrada">${opciones(aniosDisponibles(), anioInicial)}</select></div>
         <div class="campo"><label for="fecha-carta">Fecha de la carta</label><input id="fecha-carta" type="date" class="entrada" value="${hoyISO()}"></div>
@@ -129,11 +133,17 @@ function individual(el, miembroInicial, anioInicial) {
     <div id="carta" class="mt-2"></div>`);
 
   const selector = selectorMiembro($('#miembro', el), { inicial: miembroInicial, soloActivos: false });
+  const destinatarioElegido = enlazarDestinatario(el);
 
   $('#form-carta', el).addEventListener('submit', async (e) => {
     e.preventDefault();
-    const miembro = selector.obtener();
-    if (!miembro) {
+    const { esFamilia, familiaId } = destinatarioElegido();
+    let miembro = esFamilia ? null : selector.obtener();
+    if (esFamilia && !familiaId) {
+      pintar($('#mensaje', el), alerta('error', 'Seleccione la familia.'));
+      return;
+    }
+    if (!esFamilia && !miembro) {
       pintar($('#mensaje', el), alerta('error', 'Seleccione el miembro o donante.'));
       return;
     }
@@ -144,8 +154,31 @@ function individual(el, miembroInicial, anioInicial) {
     const fechaCarta = $('#fecha-carta', el).value || hoyISO();
     const zona = $('#carta', el);
     zona.style.opacity = '.6';
+
+    // Si la persona pertenece a una familia con carta conjunta, se avisa.
+    let familiaConjunta = null;
+    try {
+      if (esFamilia) {
+        miembro = await cargarDestinatarioFamilia(familiaId);
+        if (!miembro.miembros.length) {
+          zona.style.opacity = '';
+          pintar(zona, alerta('advertencia', html`La familia ${miembro.familia.nombre} no tiene miembros.
+            <a href="#/familias/${familiaId}">Agréguelos aquí</a>.`));
+          return;
+        }
+      } else if (miembro.familia_id) {
+        const familia = await cargarFamilia(miembro.familia_id);
+        if (familia?.carta_conjunta) familiaConjunta = familia;
+      }
+    } catch (err) {
+      zona.style.opacity = '';
+      pintar(zona, alerta('error', mensajeError(err)));
+      return;
+    }
+
+    const filtro = esFamilia ? { familia_id: familiaId } : { miembro_id: miembro.id };
     const { data, error } = await sb.rpc('buscar_aportaciones', {
-      p_filtros: { miembro_id: miembro.id, desde: `${anio}-01-01`, hasta: `${anio}-12-31`, estado: 'REGISTRADA' },
+      p_filtros: { ...filtro, desde: `${anio}-01-01`, hasta: `${anio}-12-31`, estado: 'REGISTRADA' },
       p_limite: 50000, p_desplazamiento: 0, p_orden: 'fecha_asc',
     });
     zona.style.opacity = '';
@@ -161,9 +194,14 @@ function individual(el, miembroInicial, anioInicial) {
     const resumen = resumir(filas);
     const textos = textosCarta(miembro, anio, resumen, plantilla);
     prepararCarta(zona, { miembro, anio, fechaCarta, filas, resumen, textos, conDetalle });
+    if (familiaConjunta) {
+      zona.insertAdjacentHTML('afterbegin', String(alerta('info', html`${nombreCompleto(miembro)} pertenece a la familia
+        <strong>${familiaConjunta.nombre}</strong>, que recibe una carta conjunta.
+        <a href="#/cartas?familia=${familiaConjunta.id}&anio=${anio}">Preparar la carta familiar</a>.`)));
+    }
   });
 
-  if (miembroInicial) $('#form-carta', el).requestSubmit();
+  if (miembroInicial || familiaInicial) $('#form-carta', el).requestSubmit();
 }
 
 function prepararCarta(zona, { miembro, anio, fechaCarta, filas, resumen, textos, conDetalle }) {
@@ -186,7 +224,8 @@ function prepararCarta(zona, { miembro, anio, fechaCarta, filas, resumen, textos
       </section>
       <section class="tarjeta">
         <div class="tarjeta-titulo"><h3>Resumen ${anio}</h3></div>
-        <p><strong>${nombreCompleto(miembro)}</strong><br><span class="mono texto-tenue">${miembro.numero_miembro}</span></p>
+        <p><strong>${nombreCompleto(miembro)}</strong><br><span class="mono texto-tenue">${miembro.numero_miembro}</span>
+          ${miembro.es_familia ? html`<br><span class="texto-tenue texto-pequeno">Incluye a: ${miembro.miembros.map(nombreCompleto).join(', ')}</span>` : ''}</p>
         <div class="tabla-contenedor">
           <table class="tabla tabla-compacta">
             <thead><tr><th>Fondo</th><th class="num">Cant.</th><th class="dinero">Total</th></tr></thead>
@@ -218,7 +257,7 @@ function prepararCarta(zona, { miembro, anio, fechaCarta, filas, resumen, textos
       detalle: conDetalle ? filas : null,
     });
     registrarEvento('GENERAR_CARTA_ANUAL', {
-      tabla: 'miembros', registroId: miembro.id,
+      tabla: miembro.es_familia ? 'familias' : 'miembros', registroId: miembro.id,
       descripcion: `Carta anual ${anio} — ${miembro.numero_miembro} ${nombreCompleto(miembro)} (${dineroCentavos(resumen.totalCentavos)})`,
     });
     return doc;
@@ -236,7 +275,7 @@ function prepararCarta(zona, { miembro, anio, fechaCarta, filas, resumen, textos
     const ruta = `cartas-anuales/${anio}/${miembro.numero_miembro}_${marcaArchivo()}.pdf`;
     const { error } = await sb.storage.from('documentos').upload(ruta, doc.output('blob'), { contentType: 'application/pdf', upsert: false });
     if (error) throw error;
-    registrarEvento('ARCHIVAR_DOCUMENTO', { tabla: 'miembros', registroId: miembro.id, descripcion: `Carta anual archivada: ${ruta}` });
+    registrarEvento('ARCHIVAR_DOCUMENTO', { tabla: miembro.es_familia ? 'familias' : 'miembros', registroId: miembro.id, descripcion: `Carta anual archivada: ${ruta}` });
     aviso('Copia archivada de forma privada.');
     listarArchivo($('#archivo', zona), anio, miembro);
   }));
@@ -270,7 +309,7 @@ async function listarArchivo(el, anio, miembro) {
 function lote(el) {
   pintar(el, html`
     <form class="tarjeta formulario" id="form-lote" novalidate>
-      ${alerta('info', 'Genera un solo PDF con una carta por cada donante que tenga aportaciones válidas en el año seleccionado, usando los textos de Configuración.')}
+      ${alerta('info', 'Genera un solo PDF con una carta por cada donante que tenga aportaciones válidas en el año seleccionado, usando los textos de Configuración. Las familias con carta conjunta reciben una sola carta con el total de todos sus miembros.')}
       <div class="fila-campos">
         <div class="campo"><label for="l-anio">Año</label><select id="l-anio" class="entrada">${opciones(aniosDisponibles(), anioPredeterminado())}</select></div>
         <div class="campo"><label for="l-fecha">Fecha de las cartas</label><input id="l-fecha" type="date" class="entrada" value="${hoyISO()}"></div>
@@ -307,11 +346,33 @@ function lote(el) {
         pintar(res, alerta('advertencia', `No hay aportaciones válidas registradas en ${anio}.`));
         return;
       }
-      const miembros = await obtenerTodos(() => sb.from('miembros').select(COLUMNAS_MIEMBRO).order('id'));
+      const [miembros, familias] = await Promise.all([
+        obtenerTodos(() => sb.from('miembros').select(COLUMNAS_MIEMBRO).order('numero_miembro')),
+        cargarFamilias(),
+      ]);
       const mapa = new Map(miembros.map((m) => [m.id, m]));
-      const cartas = [...porMiembro.entries()]
-        .map(([id, filas]) => {
-          const miembro = mapa.get(id);
+      const conjuntas = new Map(familias.filter((f) => f.carta_conjunta).map((f) => [f.id, f]));
+
+      // Un grupo por destinatario: la familia (si recibe carta conjunta) o la persona.
+      const grupos = new Map();
+      for (const [id, filas] of porMiembro) {
+        const m = mapa.get(id);
+        const familia = conjuntas.get(m.familia_id);
+        const clave = familia ? `F:${familia.id}` : `M:${id}`;
+        if (!grupos.has(clave)) {
+          grupos.set(clave, {
+            destinatario: familia ? destinatarioFamilia(familia, miembros.filter((x) => x.familia_id === familia.id)) : m,
+            filas: [],
+          });
+        }
+        grupos.get(clave).filas.push(...filas);
+      }
+      const claveOrden = (m) => (m.es_familia ? `${m.miembros[0]?.apellido || ''} ${m.nombre}` : `${m.apellido} ${m.nombre}`);
+
+      const cartas = [...grupos.values()]
+        .map(({ destinatario: miembro, filas: filasGrupo }) => {
+          const filas = filasGrupo.sort((a, b) => a.fecha_aportacion.localeCompare(b.fecha_aportacion)
+            || a.numero_recibo.localeCompare(b.numero_recibo));
           const resumen = resumir(filas);
           const textos = textosCarta(miembro, anio, resumen, plantilla);
           return {
@@ -320,7 +381,7 @@ function lote(el) {
             detalle: conDetalle ? filas : null, cantidad: filas.length,
           };
         })
-        .sort((a, b) => `${a.miembro.apellido} ${a.miembro.nombre}`.localeCompare(`${b.miembro.apellido} ${b.miembro.nombre}`, 'es'));
+        .sort((a, b) => claveOrden(a.miembro).localeCompare(claveOrden(b.miembro), 'es'));
       const total = cartas.reduce((s, c) => s + c.totalCentavos, 0);
 
       pintar(res, html`
@@ -337,7 +398,8 @@ function lote(el) {
               <thead><tr><th>Número</th><th>Donante</th><th>Dirección</th><th class="num">Aportaciones</th><th class="dinero">Total</th><th>Plantilla</th></tr></thead>
               <tbody>${cartas.map((c) => html`<tr>
                 <td class="mono nowrap">${c.miembro.numero_miembro}</td>
-                <td>${nombreCompleto(c.miembro)}</td>
+                <td>${nombreCompleto(c.miembro)}${c.miembro.es_familia
+                  ? html`<br><span class="insignia">Familia · ${entero(c.miembro.miembros.length)} personas</span>` : ''}</td>
                 <td>${c.miembro.direccion ? '' : html`<span class="insignia ambar">Sin dirección</span>`} ${c.miembro.direccion || ''}</td>
                 <td class="num">${entero(c.cantidad)}</td>
                 <td class="dinero">${dineroCentavos(c.totalCentavos)}</td>

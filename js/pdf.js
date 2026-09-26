@@ -449,14 +449,16 @@ export async function pdfEstadoCuenta({ miembro, desde, hasta, filas, incluirNoV
   let y = encabezado(doc, logo);
   y = tituloDocumento(doc, 'ESTADO DE CUENTA DE APORTACIONES', y);
 
-  const yA = etiquetaValor(doc, 'Miembro / donante', nombreCompleto(miembro), MARGEN, y, util * 0.55);
+  const familiar = !!miembro.es_familia;
+  const yA = etiquetaValor(doc, familiar ? 'Familia' : 'Miembro / donante', nombreCompleto(miembro), MARGEN, y, util * 0.55);
   const yB = etiquetaValor(doc, 'Período', `${fecha(desde)} al ${fecha(hasta)}`, MARGEN + util * 0.6, y, util * 0.4);
   y = Math.max(yA, yB) + 1;
-  const yC = etiquetaValor(doc, 'Número de miembro', miembro.numero_miembro, MARGEN, y, util * 0.55);
+  const yC = etiquetaValor(doc, familiar ? 'Número de familia' : 'Número de miembro', miembro.numero_miembro, MARGEN, y, util * 0.55);
   const yD = etiquetaValor(doc, 'Fecha de emisión', capitalizar(fechaLarga(hoyISO())), MARGEN + util * 0.6, y, util * 0.4);
   y = Math.max(yC, yD) + 1;
   const dir = lineasDireccion(miembro);
   if (dir.length) y = etiquetaValor(doc, 'Dirección', dir.join('\n'), MARGEN, y, util * 0.55) + 1;
+  if (familiar) y = etiquetaValor(doc, 'Miembros', listaMiembrosFamilia(miembro), MARGEN, y, util) + 1;
   y += 3;
 
   const noValidas = new Set();
@@ -464,10 +466,12 @@ export async function pdfEstadoCuenta({ miembro, desde, hasta, filas, incluirNoV
     if (f.estado !== 'REGISTRADA') noValidas.add(i);
     const base = [fecha(f.fecha_aportacion), f.numero_recibo, f.fondo_nombre, f.metodo_pago_nombre, dinero(f.monto)];
     if (incluirNoValidas) base.splice(4, 0, capitalizar(f.estado.toLowerCase()));
+    if (familiar) base.splice(2, 0, `${f.miembro_nombre} ${f.miembro_apellido}`);
     return base;
   });
   const cabecera = ['Fecha', 'No. recibo', 'Fondo', 'Método', 'Monto'];
   if (incluirNoValidas) cabecera.splice(4, 0, 'Estado');
+  if (familiar) cabecera.splice(2, 0, 'Donante');
   const colMonto = cabecera.length - 1;
   const pie = new Array(cabecera.length).fill('');
   pie[0] = 'TOTAL DEL PERÍODO';
@@ -515,6 +519,11 @@ export async function pdfEstadoCuenta({ miembro, desde, hasta, filas, incluirNoV
   return doc;
 }
 
+// "EBE-000010 José Sariñana, EBE-000011 María Sariñana"
+function listaMiembrosFamilia(destinatario) {
+  return destinatario.miembros.map((m) => `${m.numero_miembro} ${nombreCompleto(m)}`).join(', ');
+}
+
 // ---------------------------------------------------------------------
 // CARTA ANUAL DE CONTRIBUCIONES
 // datos: { miembro, anio, fechaCarta, cuerpo, cierre, resumenFondos, totalCentavos,
@@ -555,7 +564,13 @@ export async function pdfCartaAnual(datos, { doc: docExistente = null, nuevaPagi
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9.5);
   doc.setTextColor(...GRIS);
-  doc.text(`Número de miembro/donante: ${datos.miembro.numero_miembro}`, MARGEN, y);
+  if (datos.miembro.es_familia) {
+    const lineas = doc.splitTextToSize(`Familia ${datos.miembro.numero_miembro} · ${listaMiembrosFamilia(datos.miembro)}`, util);
+    doc.text(lineas, MARGEN, y);
+    y += 4.2 * (lineas.length - 1);
+  } else {
+    doc.text(`Número de miembro/donante: ${datos.miembro.numero_miembro}`, MARGEN, y);
+  }
   y += 9;
 
   y = parrafos(doc, datos.cuerpo, MARGEN, y, util);
@@ -590,9 +605,13 @@ export async function pdfCartaAnual(datos, { doc: docExistente = null, nuevaPagi
     doc.text('Detalle de contribuciones', MARGEN, y);
     y = tabla(doc, {
       startY: y + 3,
-      head: [['Fecha', 'No. recibo', 'Fondo', 'Método', 'Monto']],
-      body: datos.detalle.map((f) => [fecha(f.fecha_aportacion), f.numero_recibo, f.fondo_nombre, f.metodo_pago_nombre, dinero(f.monto)]),
-      columnStyles: { 4: { halign: 'right' } },
+      head: [datos.miembro.es_familia
+        ? ['Fecha', 'No. recibo', 'Donante', 'Fondo', 'Método', 'Monto']
+        : ['Fecha', 'No. recibo', 'Fondo', 'Método', 'Monto']],
+      body: datos.detalle.map((f) => (datos.miembro.es_familia
+        ? [fecha(f.fecha_aportacion), f.numero_recibo, `${f.miembro_nombre} ${f.miembro_apellido}`, f.fondo_nombre, f.metodo_pago_nombre, dinero(f.monto)]
+        : [fecha(f.fecha_aportacion), f.numero_recibo, f.fondo_nombre, f.metodo_pago_nombre, dinero(f.monto)])),
+      columnStyles: { [datos.miembro.es_familia ? 5 : 4]: { halign: 'right' } },
       styles: { fontSize: 8.5 },
     }) + 7;
   }

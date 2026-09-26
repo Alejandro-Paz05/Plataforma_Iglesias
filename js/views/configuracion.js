@@ -6,10 +6,10 @@ import {
   marcaArchivo, fechaHora, entero, establecerZonaHoraria,
 } from '../utils.js';
 import { icono } from '../icons.js';
-import { opciones } from '../components.js';
+import { opciones, cargarFamilias } from '../components.js';
 import { refrescarMarca, urlLogo } from '../app.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const ZONAS_COMUNES = [
   'America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix', 'America/Los_Angeles',
   'America/Anchorage', 'Pacific/Honolulu', 'America/Puerto_Rico', 'America/Tegucigalpa', 'America/Mexico_City',
@@ -256,10 +256,16 @@ export async function render({ cont, titulo }) {
     const b = e.currentTarget;
     b.disabled = true;
     try {
-      const filas = await obtenerTodos(() => sb.from('miembros').select('*').order('numero_miembro'));
+      const [filas, familias] = await Promise.all([
+        obtenerTodos(() => sb.from('miembros').select('*').order('numero_miembro')),
+        cargarFamilias(),
+      ]);
+      const familia = new Map(familias.map((f) => [f.id, f]));
       descargarCSV(`miembros-${marcaArchivo()}.csv`,
-        ['Número', 'Nombre', 'Apellido', 'Tipo', 'Activo', 'Teléfono', 'Email', 'Dirección', 'Ciudad', 'Estado', 'ZIP', 'Fecha de ingreso', 'Notas', 'Creado'],
-        filas.map((m) => [m.numero_miembro, m.nombre, m.apellido, m.tipo_persona, m.activo ? 'Sí' : 'No', m.telefono, m.email,
+        ['Número', 'Nombre', 'Apellido', 'Tipo', 'Activo', 'Familia', 'No. familia', 'Teléfono', 'Email', 'Dirección', 'Ciudad', 'Estado', 'ZIP',
+          'Fecha de ingreso', 'Notas', 'Creado'],
+        filas.map((m) => [m.numero_miembro, m.nombre, m.apellido, m.tipo_persona, m.activo ? 'Sí' : 'No',
+          familia.get(m.familia_id)?.nombre, familia.get(m.familia_id)?.numero_familia, m.telefono, m.email,
           m.direccion, m.ciudad, m.estado, m.zip, m.fecha_ingreso, m.notas, m.created_at]));
       registrarEvento('EXPORTAR_DATOS', { tabla: 'miembros', descripcion: `Exportación CSV de miembros (${filas.length})` });
     } catch (err) {
@@ -313,6 +319,7 @@ async function exportarTodo(boton, msg) {
       administradores: () => sb.from('administradores').select('*').order('user_id'),
       fondos: () => sb.from('fondos').select('*').order('id'),
       metodos_pago: () => sb.from('metodos_pago').select('*').order('id'),
+      familias: () => sb.from('familias').select('*').order('id'),
       miembros: () => sb.from('miembros').select('*').order('id'),
       aportaciones: () => sb.from('aportaciones').select('*').order('id'),
       bitacora: () => sb.from('bitacora').select('*').order('fecha_hora').order('id'),

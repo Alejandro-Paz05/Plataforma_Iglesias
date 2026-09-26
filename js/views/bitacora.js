@@ -18,6 +18,7 @@ const ACCIONES = [
 const TABLAS = [
   { valor: 'aportaciones', texto: 'Aportaciones' },
   { valor: 'miembros', texto: 'Miembros' },
+  { valor: 'familias', texto: 'Familias' },
   { valor: 'fondos', texto: 'Fondos' },
   { valor: 'metodos_pago', texto: 'Métodos de pago' },
   { valor: 'configuracion_iglesia', texto: 'Configuración' },

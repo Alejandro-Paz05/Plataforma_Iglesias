@@ -5,7 +5,7 @@ import {
 } from './utils.js';
 
 export const COLUMNAS_MIEMBRO =
-  'id, numero_miembro, nombre, apellido, direccion, ciudad, estado, zip, telefono, email, tipo_persona, activo';
+  'id, numero_miembro, nombre, apellido, direccion, ciudad, estado, zip, telefono, email, tipo_persona, activo, familia_id';
 
 export const ESTADOS_APORTACION = {
   REGISTRADA: { texto: 'Registrada', clase: 'verde' },
@@ -42,6 +42,111 @@ export async function cargarMiembro(id) {
   const { data, error } = await sb.from('miembros').select(COLUMNAS_MIEMBRO).eq('id', id).maybeSingle();
   if (error) throw error;
   return data;
+}
+
+// ---------------------------------------------------------------------
+// Familias
+// ---------------------------------------------------------------------
+export async function cargarFamilias() {
+  const { data, error } = await sb.from('familias').select('*').order('nombre');
+  if (error) throw error;
+  return data;
+}
+
+export async function cargarFamilia(id) {
+  const { data, error } = await sb.from('familias').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Todos los miembros de la familia (activos e inactivos), por número.
+export async function miembrosDeFamilia(familiaId) {
+  const { data, error } = await sb.from('miembros').select(COLUMNAS_MIEMBRO).eq('familia_id', familiaId).order('numero_miembro');
+  if (error) throw error;
+  return data;
+}
+
+// "José y María", "Ana, Luis e Isabel"
+function unirNombres(lista) {
+  if (lista.length < 2) return lista[0] || '';
+  const ultimo = lista[lista.length - 1];
+  const conjuncion = /^h?i(?![aeiouáéíóú])/i.test(ultimo) ? 'e' : 'y';
+  return `${lista.slice(0, -1).join(', ')} ${conjuncion} ${ultimo}`;
+}
+
+// Cómo se dirige la carta: el nombre configurado o "José y María Sariñana".
+export function nombreCartaFamilia(familia, miembros) {
+  if (familia.nombre_carta) return familia.nombre_carta;
+  if (!miembros.length) return familia.nombre;
+  const mismoApellido = new Set(miembros.map((m) => m.apellido)).size === 1;
+  return mismoApellido
+    ? `${unirNombres(miembros.map((m) => m.nombre))} ${miembros[0].apellido}`
+    : unirNombres(miembros.map(nombreCompleto));
+}
+
+// Destinatario de una carta o estado de cuenta familiar, con la misma forma
+// que un miembro (nombre, dirección, número) para reutilizar los documentos.
+// La dirección es la del primer miembro que tenga una registrada.
+export function destinatarioFamilia(familia, miembros) {
+  const conDireccion = miembros.find((m) => m.direccion) || {};
+  return {
+    id: familia.id,
+    es_familia: true,
+    familia,
+    miembros,
+    numero_miembro: familia.numero_familia,
+    nombre: nombreCartaFamilia(familia, miembros),
+    apellido: '',
+    direccion: conDireccion.direccion || null,
+    ciudad: conDireccion.ciudad || null,
+    estado: conDireccion.estado || null,
+    zip: conDireccion.zip || null,
+    email: conDireccion.email || null,
+  };
+}
+
+// Destinatario "Persona / Familia" (carta anual y estado de cuenta).
+export function camposDestinatario(familias, familiaInicial) {
+  return html`
+    <div class="fila-campos">
+      <div class="campo">
+        <label for="tipo-destinatario">Para</label>
+        <select id="tipo-destinatario" class="entrada">${opciones([
+          { valor: 'persona', texto: 'Una persona' },
+          { valor: 'familia', texto: 'Una familia (conjunto)' },
+        ], familiaInicial ? 'familia' : 'persona')}</select>
+      </div>
+      <div class="campo" id="campo-familia" ${familiaInicial ? '' : 'hidden'}>
+        <label class="requerido" for="familia">Familia</label>
+        <select id="familia" class="entrada">${opciones([
+          { valor: '', texto: familias.length ? 'Seleccione…' : 'No hay familias registradas' },
+          ...familias.map((f) => ({ valor: f.id, texto: `${f.nombre} (${f.numero_familia})` })),
+        ], familiaInicial?.id || '')}</select>
+      </div>
+    </div>
+    <div class="campo" id="campo-persona" ${familiaInicial ? 'hidden' : ''}>
+      <label class="requerido" for="selector-miembro">Miembro / donante</label>
+      <div id="miembro"></div>
+    </div>`;
+}
+
+// Devuelve una función que indica si se eligió familia y cuál.
+export function enlazarDestinatario(el) {
+  $('#tipo-destinatario', el).addEventListener('change', (e) => {
+    const familia = e.target.value === 'familia';
+    $('#campo-familia', el).hidden = !familia;
+    $('#campo-persona', el).hidden = familia;
+  });
+  return () => ({
+    esFamilia: $('#tipo-destinatario', el).value === 'familia',
+    familiaId: $('#familia', el).value || null,
+  });
+}
+
+// Destinatario de una familia con todos sus miembros.
+export async function cargarDestinatarioFamilia(id) {
+  const [familia, miembros] = await Promise.all([cargarFamilia(id), miembrosDeFamilia(id)]);
+  return familia ? destinatarioFamilia(familia, miembros) : null;
 }
 
 // ---------------------------------------------------------------------

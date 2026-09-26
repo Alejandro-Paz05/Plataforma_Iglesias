@@ -10,3 +10,6 @@ publicar/
 # Sistema
 Thumbs.db
 .DS_Store
+
+# Datos reales para importar (información personal y financiera)
+importacion/
