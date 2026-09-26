@@ -171,8 +171,10 @@ function tituloDocumento(doc, titulo, y) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(...AZUL_PROFUNDO);
-  doc.text(titulo, MARGEN, y);
-  return y + 8;
+  // Los títulos largos (p. ej., varios métodos de pago) pasan a la línea siguiente.
+  const lineas = doc.splitTextToSize(titulo, anchoPagina(doc) - MARGEN * 2);
+  doc.text(lineas, MARGEN, y);
+  return y + 8 + (lineas.length - 1) * 5.6;
 }
 
 function etiquetaValor(doc, etiqueta, valor, x, y, anchoMax) {

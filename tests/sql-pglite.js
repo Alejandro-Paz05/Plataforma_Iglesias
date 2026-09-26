@@ -48,6 +48,7 @@ const MIGRACIONES = [
   '20260922000600_storage.sql',
   '20260922000700_familias.sql',
   '20260926000800_aportaciones_anonimas.sql',
+  '20260926000900_grupos_familiares.sql',
 ];
 
 async function texto(ruta) {
@@ -82,6 +83,7 @@ async function texto(ruta) {
       ['FASE 1', '../supabase/pruebas/verificacion_fase1.sql'],
       ['FAMILIAS', '../supabase/pruebas/verificacion_familias.sql'],
       ['ANÓNIMOS', '../supabase/pruebas/verificacion_anonimos.sql'],
+      ['GRUPOS FAMILIARES', '../supabase/pruebas/verificacion_grupos_familiares.sql'],
     ];
     for (const [nombre, archivo] of verificaciones) {
       const resultado = await db.exec(await texto(archivo));
@@ -102,9 +104,9 @@ async function texto(ruta) {
     const cuenta = await db.query(`select count(*)::int as n from public.administradores where email = 'pastor@ebenezer.org' and activo`);
     log('Administradores activos con ese correo: ' + cuenta.rows[0].n);
 
-    // La verificación no debe dejar datos (el único miembro es el donante anónimo)
+    // La verificación no debe dejar datos (los únicos miembros son los registros del sistema)
     const residuos = await db.query(`select (select count(*) from public.miembros)::int as miembros,
-      (select count(*) from public.miembros where es_anonimo)::int as anonimos,
+      (select count(*) from public.miembros where registro_sistema is not null)::int as registros_sistema,
       (select count(*) from public.aportaciones)::int as aportaciones,
       (select count(*) from public.familias)::int as familias,
       (select count(*) from public.contadores)::int as contadores`);

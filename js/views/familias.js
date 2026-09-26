@@ -274,7 +274,7 @@ export async function detalle({ cont, params, titulo }) {
 
   selectorMiembro($('#agregar', cont), {
     soloActivos: false,
-    excluirAnonimo: true,
+    excluirSistema: true,
     placeholder: 'Buscar por nombre, apellido, número, teléfono o email…',
     alCambiar: async (m) => {
       if (!m) return;

@@ -5,9 +5,9 @@ en la base de datos) ejecute al menos el **nivel 1** en el proyecto de Supabase.
 
 | Nivel | Qué verifica | Dónde se ejecuta | Resultado esperado |
 |---|---|---|---|
-| 1. Verificación SQL | Integridad financiera, numeración, anulación/corrección, inmutabilidad, bitácora, RLS, familias, anónimos | SQL Editor de Supabase | 60 + 17 + 17 pruebas **OK** |
-| 2. Migraciones en PGlite | Que las migraciones se instalan en PostgreSQL limpio y pasan la verificación | Navegador local | 8 migraciones OK + 60 + 17 + 17 pruebas OK |
-| 3. Escenario de interfaz | Flujos completos de la aplicación y generación de PDF (con datos simulados) | Navegador local | 60 verificaciones OK, sin errores |
+| 1. Verificación SQL | Integridad financiera, numeración, anulación/corrección, inmutabilidad, bitácora, RLS, familias, anónimos, grupos familiares | SQL Editor de Supabase | 60 + 17 + 17 + 16 pruebas **OK** |
+| 2. Migraciones en PGlite | Que las migraciones se instalan en PostgreSQL limpio y pasan la verificación | Navegador local | 9 migraciones OK + 60 + 17 + 17 + 16 pruebas OK |
+| 3. Escenario de interfaz | Flujos completos de la aplicación y generación de PDF (con datos simulados) | Navegador local | 68 verificaciones OK, sin errores |
 
 ---
 
@@ -16,7 +16,7 @@ en la base de datos) ejecute al menos el **nivel 1** en el proyecto de Supabase.
 1. Abra Supabase → **SQL Editor** → *New query*.
 2. Pegue el contenido completo de `supabase/pruebas/verificacion_fase1.sql` y pulse **Run**.
 3. El resultado es una tabla: **todas** las filas deben decir `OK`.
-4. Repita con `supabase/pruebas/verificacion_familias.sql` (17 pruebas) y `supabase/pruebas/verificacion_anonimos.sql` (17 pruebas).
+4. Repita con `supabase/pruebas/verificacion_familias.sql` (17 pruebas) `supabase/pruebas/verificacion_anonimos.sql` (17 pruebas) y `supabase/pruebas/verificacion_grupos_familiares.sql` (16 pruebas).
 
 La verificación crea usuarios, miembros y aportaciones de prueba **dentro de una subtransacción que se revierte**:
 no deja datos, no consume números de recibo ni de miembro y no deja registros en la bitácora.
@@ -52,8 +52,8 @@ Con el servidor local activo, abra:
 Marque cada punto después de instalar. Antes de avanzar a la siguiente fase, confirme que la anterior está completa.
 
 ### Fase 1 — Base de datos y seguridad
-- [ ] Las 8 migraciones (o `instalacion_completa.sql`) se ejecutaron sin errores.
-- [ ] `verificacion_fase1.sql`, `verificacion_familias.sql` y `verificacion_anonimos.sql` → todas las pruebas **OK**.
+- [ ] Las 9 migraciones (o `instalacion_completa.sql`) se ejecutaron sin errores.
+- [ ] `verificacion_fase1.sql`, `verificacion_familias.sql`, `verificacion_anonimos.sql` y `verificacion_grupos_familiares.sql` → todas las pruebas **OK**.
 - [ ] *Table Editor*: cada tabla muestra el indicador de **RLS habilitado**.
 - [ ] *Storage*: existen los buckets `institucional` (público) y `documentos` (privado).
 
@@ -87,6 +87,11 @@ Marque cada punto después de instalar. Antes de avanzar a la siguiente fase, co
 - [ ] "Anónimo" no aparece al buscar para la carta anual ni para agregar a una familia; el lote de cartas lo omite y lo indica.
 - [ ] La ficha de "Anónimo" no permite desactivarlo ni eliminarlo; su nombre no se puede cambiar.
 - [ ] El panel de inicio no lo cuenta como miembro, pero sus aportaciones sí suman en los totales.
+
+### Fase 4d — Grupos Familiares
+- [ ] En *Nueva aportación*, **Grupos Familiares** elige ese registro y se genera su recibo.
+- [ ] Tiene estado de cuenta, aparece en los reportes y recibe carta anual (individual y en el lote).
+- [ ] No aparece al buscar para agregar a una familia; su ficha no permite desactivarlo ni eliminarlo; su nombre no cambia.
 
 ### Fase 5 — Fondos y métodos de pago
 - [ ] Se pueden crear, editar y desactivar.

@@ -6,7 +6,9 @@ import {
   dinero, nombreCompleto, aCentavos,
 } from '../utils.js';
 import { icono } from '../icons.js';
-import { selectorMiembro, cargarMiembro, cargarAnonimo, opciones, uuid, insigniaEstado } from '../components.js';
+import {
+  selectorMiembro, cargarMiembro, cargarRegistroSistema, opciones, uuid, insigniaEstado, REGISTROS_SISTEMA,
+} from '../components.js';
 import { pdfRecibo, mostrarPDF, descargarPDF } from '../pdf.js';
 
 // Valores recordados entre registros consecutivos (captura por lotes).
@@ -88,7 +90,8 @@ function mostrarFormulario(cont, { original = null, miembro = null } = {}) {
           <label class="requerido" for="selector-miembro">Miembro / donante</label>
           <div id="miembro"></div>
           <div class="rapidos">
-            <button type="button" class="chip" id="anonima">Aportación anónima</button>
+            ${Object.entries(REGISTROS_SISTEMA).map(([clave, r]) => html`
+              <button type="button" class="chip" data-registro="${clave}">${r.boton}</button>`)}
           </div>
         </div>
         <div class="fila-campos">
@@ -159,19 +162,19 @@ function mostrarFormulario(cont, { original = null, miembro = null } = {}) {
   const selector = selectorMiembro($('#miembro', cont), { inicial: miembro, soloActivos: !original });
   if (!miembro) selector.enfocar(); else $('#monto', cont).focus();
 
-  $('#anonima', cont).addEventListener('click', async () => {
+  $$('[data-registro]', cont).forEach((b) => b.addEventListener('click', async () => {
     try {
-      const anonimo = await cargarAnonimo();
-      if (!anonimo) {
-        pintar($('#mensaje', cont), alerta('error', 'Falta instalar las aportaciones anónimas en la base de datos (migración 08).'));
+      const registro = await cargarRegistroSistema(b.dataset.registro);
+      if (!registro) {
+        pintar($('#mensaje', cont), alerta('error', `Falta instalar "${b.textContent.trim()}" en la base de datos.`));
         return;
       }
-      selector.establecer(anonimo);
+      selector.establecer(registro);
       $('#monto', cont).focus();
     } catch (err) {
       pintar($('#mensaje', cont), alerta('error', mensajeError(err)));
     }
-  });
+  }));
 
   const bienes = $('#bienes', cont);
   bienes.addEventListener('change', () => { $('#bloque-bienes', cont).hidden = bienes.value !== 'si'; });

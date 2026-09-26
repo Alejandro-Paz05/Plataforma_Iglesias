@@ -35,7 +35,7 @@
       telefono: '(305) 555-01' + String(i).padStart(2, '0'), email: normal(p[0]) + '@ejemplo.com',
       fecha_ingreso: '2019-0' + (1 + (i % 9)) + '-15', tipo_persona: i === 7 ? 'Donante' : 'Miembro', activo: i !== 6,
       notas: i === 0 ? 'Diácono' : null, created_at: ahora(), updated_at: ahora(), created_by: USUARIO.id, updated_by: null,
-      familia_id: null, es_anonimo: false,
+      familia_id: null, es_anonimo: false, registro_sistema: null,
     };
     m.texto_busqueda = busqueda(m);
     return m;
@@ -44,10 +44,16 @@
     id: nuevoId(), numero_miembro: 'EBE-' + String(miembros.length + 1).padStart(6, '0'), nombre: 'Anónimo', apellido: '',
     direccion: null, ciudad: null, estado: null, zip: null, telefono: null, email: null, fecha_ingreso: null, tipo_persona: 'Otro',
     activo: true, notas: 'Registro del sistema para las aportaciones anónimas.', created_at: ahora(), updated_at: ahora(),
-    created_by: USUARIO.id, updated_by: null, familia_id: null, es_anonimo: true,
+    created_by: USUARIO.id, updated_by: null, familia_id: null, es_anonimo: true, registro_sistema: 'ANONIMO',
   };
   anonimo.texto_busqueda = busqueda(anonimo);
   miembros.push(anonimo);
+  var gruposFamiliares = Object.assign({}, anonimo, {
+    id: nuevoId(), numero_miembro: 'EBE-' + String(miembros.length + 1).padStart(6, '0'), nombre: 'Grupos Familiares',
+    notas: 'Registro del sistema para las aportaciones de los grupos familiares.', es_anonimo: false, registro_sistema: 'GRUPOS_FAMILIARES',
+  });
+  gruposFamiliares.texto_busqueda = busqueda(gruposFamiliares);
+  miembros.push(gruposFamiliares);
 
   var contadores = {};
   function siguienteRecibo(anio) { contadores[anio] = (contadores[anio] || 0) + 1; return 'EBE-' + anio + '-' + String(contadores[anio]).padStart(6, '0'); }
@@ -90,6 +96,8 @@
     bienes_servicios: true, valor_bienes_servicios: 40, descripcion_bienes_servicios: 'Cena de gala' });
   nuevaAportacion({ miembro_id: anonimo.id, fecha_aportacion: HOY, fondo_id: fondos[1].id, monto: 243.75, metodo_pago_id: metodos[0].id,
     descripcion: 'Ofrenda del servicio' });
+  nuevaAportacion({ miembro_id: gruposFamiliares.id, fecha_aportacion: HOY, fondo_id: fondos[1].id, monto: 180, metodo_pago_id: metodos[0].id,
+    descripcion: 'Ofrenda de los grupos familiares' });
   var anulada = nuevaAportacion({ miembro_id: miembros[0].id, fecha_aportacion: HOY, fondo_id: fondos[0].id, monto: 999, metodo_pago_id: metodos[0].id });
   anulada.estado = 'ANULADA'; anulada.anulada_at = ahora(); anulada.anulada_by = USUARIO.id; anulada.motivo_anulacion = 'Monto capturado por error';
   nuevaAportacion({ miembro_id: miembros[0].id, fecha_aportacion: HOY, fondo_id: fondos[0].id, monto: 99, metodo_pago_id: metodos[0].id,
@@ -126,7 +134,7 @@
     var c = a.corregida_por_id ? porId(aportaciones, a.corregida_por_id) : null;
     return Object.assign({}, a, {
       numero_miembro: m.numero_miembro, miembro_nombre: m.nombre, miembro_apellido: m.apellido, miembro_busqueda: m.texto_busqueda,
-      familia_id: m.familia_id || null, miembro_anonimo: !!m.es_anonimo,
+      familia_id: m.familia_id || null, miembro_anonimo: !!m.es_anonimo, miembro_registro_sistema: m.registro_sistema || null,
       fondo_nombre: fo.nombre, metodo_pago_nombre: me.nombre, corrige_numero_recibo: o ? o.numero_recibo : null,
       corregida_por_numero_recibo: c ? c.numero_recibo : null, creado_por_email: USUARIO.email,
       anulada_por_email: a.anulada_by ? USUARIO.email : null,
@@ -153,6 +161,7 @@
   Consulta.prototype.update = function (d) { this.modo = 'update'; this.datos = d; return this; };
   Consulta.prototype.delete = function () { this.modo = 'delete'; return this; };
   Consulta.prototype.eq = function (c, v) { this.filtros.push(function (r) { return String(r[c]) === String(v); }); return this; };
+  Consulta.prototype.is = function (c, v) { this.filtros.push(function (r) { return (r[c] == null ? null : r[c]) === v; }); return this; };
   Consulta.prototype.gte = function (c, v) { this.filtros.push(function (r) { return r[c] >= v; }); return this; };
   Consulta.prototype.lt = function (c, v) { this.filtros.push(function (r) { return r[c] < v; }); return this; };
   Consulta.prototype.ilike = function (c, p) {
@@ -174,7 +183,7 @@
       var d = this.datos; var nuevo;
       if (t === 'aportaciones') nuevo = nuevaAportacion(d);
       else if (t === 'miembros') {
-        nuevo = Object.assign({ id: nuevoId(), activo: true, familia_id: null, es_anonimo: false, created_at: ahora(), updated_at: ahora() }, d,
+        nuevo = Object.assign({ id: nuevoId(), activo: true, familia_id: null, es_anonimo: false, registro_sistema: null, created_at: ahora(), updated_at: ahora() }, d,
           { numero_miembro: 'EBE-' + String(miembros.length + 1).padStart(6, '0') });
         nuevo.texto_busqueda = busqueda(nuevo);
         miembros.push(nuevo);
@@ -260,8 +269,8 @@
     });
     return {
       hoy: HOY, zona_horaria: config.zona_horaria, total_hoy: suma(hoy), cantidad_hoy: hoy.length, total_mes: suma(mes), cantidad_mes: mes.length,
-      total_anio: suma(val), cantidad_anio: val.length, miembros_activos: miembros.filter(function (x) { return x.activo && !x.es_anonimo; }).length,
-      miembros_total: miembros.filter(function (x) { return !x.es_anonimo; }).length, no_validas_anio: aportaciones.filter(function (a) { return a.estado !== 'REGISTRADA'; }).length,
+      total_anio: suma(val), cantidad_anio: val.length, miembros_activos: miembros.filter(function (x) { return x.activo && !x.registro_sistema; }).length,
+      miembros_total: miembros.filter(function (x) { return !x.registro_sistema; }).length, no_validas_anio: aportaciones.filter(function (a) { return a.estado !== 'REGISTRADA'; }).length,
       por_fondo: porFondo, por_mes: porMes, recientes: recientes,
     };
   }

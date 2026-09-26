@@ -137,7 +137,8 @@ begin
       'ok', (v_r -> 'filas' -> 0 ->> 'miembro_anonimo')::boolean, 'd', '');
 
     v_r := public.resumen_dashboard();
-    select count(*) into v_cnt from public.miembros where not es_anonimo;
+    select count(*) into v_cnt from public.miembros m
+     where not m.es_anonimo and coalesce(to_jsonb(m) ->> 'registro_sistema', '') = '';
     v_log := v_log || jsonb_build_object('p', 'El panel de inicio no cuenta al donante anónimo como miembro',
       'ok', (v_r ->> 'miembros_total')::bigint = v_cnt, 'd', (v_r ->> 'miembros_total') || ' miembros');
 

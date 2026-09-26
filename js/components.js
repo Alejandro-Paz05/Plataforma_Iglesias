@@ -5,7 +5,14 @@ import {
 } from './utils.js';
 
 export const COLUMNAS_MIEMBRO =
-  'id, numero_miembro, nombre, apellido, direccion, ciudad, estado, zip, telefono, email, tipo_persona, activo, familia_id, es_anonimo';
+  'id, numero_miembro, nombre, apellido, direccion, ciudad, estado, zip, telefono, email, tipo_persona, activo, familia_id, es_anonimo, registro_sistema';
+
+// Registros del sistema: reciben aportaciones que no son de una persona.
+// Tienen nombre fijo y no pueden eliminarse, desactivarse ni pertenecer a una familia.
+export const REGISTROS_SISTEMA = {
+  ANONIMO: { boton: 'Aportación anónima', descripcion: 'las aportaciones anónimas', insignia: 'Aportaciones anónimas' },
+  GRUPOS_FAMILIARES: { boton: 'Grupos Familiares', descripcion: 'las aportaciones de los grupos familiares', insignia: 'Grupos familiares' },
+};
 
 export const ESTADOS_APORTACION = {
   REGISTRADA: { texto: 'Registrada', clase: 'verde' },
@@ -44,9 +51,9 @@ export async function cargarMiembro(id) {
   return data;
 }
 
-// Registro del sistema que recibe las aportaciones anónimas (null si falta la migración 08).
-export async function cargarAnonimo() {
-  const { data, error } = await sb.from('miembros').select(COLUMNAS_MIEMBRO).eq('es_anonimo', true).maybeSingle();
+// Registro del sistema por su clave (null si falta su migración).
+export async function cargarRegistroSistema(clave) {
+  const { data, error } = await sb.from('miembros').select(COLUMNAS_MIEMBRO).eq('registro_sistema', clave).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -187,8 +194,9 @@ export function selectorMiembro(contenedor, opcionesSelector = {}) {
   const {
     inicial = null,
     soloActivos = true,
-    // Cartas, estados de cuenta y familias no aplican al donante anónimo.
+    // Las cartas no aplican a "Anónimo"; las familias, a ningún registro del sistema.
     excluirAnonimo = false,
+    excluirSistema = false,
     alCambiar = () => {},
     idEntrada = 'selector-miembro',
     placeholder = 'Buscar por nombre, apellido, número, teléfono o email…',
@@ -271,6 +279,7 @@ export function selectorMiembro(contenedor, opcionesSelector = {}) {
     let q = sb.from('miembros').select(COLUMNAS_MIEMBRO).order('apellido').order('nombre').limit(12);
     if (soloActivos) q = q.eq('activo', true);
     if (excluirAnonimo) q = q.eq('es_anonimo', false);
+    if (excluirSistema) q = q.is('registro_sistema', null);
     for (const p of palabrasBusqueda(texto)) q = q.ilike('texto_busqueda', `%${p}%`);
     const { data, error } = await q;
     if (n !== solicitud || seleccionado) return;

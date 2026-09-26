@@ -211,6 +211,15 @@
     chipMetodo('Efectivo').click();
     chipMetodo('Cheque').click();
     $('#r-detalle').checked = false;
+
+    // Título largo (seis métodos, sin detalle → hoja vertical): debe pasar a una segunda línea en el PDF.
+    ['Efectivo', 'Cheque', 'ACH', 'Transferencia bancaria', 'Tarjeta', 'Otro'].forEach(function (n) { chipMetodo(n).click(); });
+    $('#filtros-reporte').requestSubmit();
+    await hasta(function () { return /Tarjeta y Otro/.test($('#salida').textContent); }, 'reporte con seis métodos');
+    $('#rep-descargar').click();
+    await espera(300);
+    ok(true, 'Reporte con título largo PDF generado');
+    ['Efectivo', 'Cheque', 'ACH', 'Transferencia bancaria', 'Tarjeta', 'Otro'].forEach(function (n) { chipMetodo(n).click(); });
     $('[data-tipo="miembros_activos"]').click();
     await espera(30);
     $('#filtros-reporte').requestSubmit();
@@ -325,7 +334,7 @@
     // Aportaciones anónimas
     var anonimo = mock.miembros.find(function (m) { return m.es_anonimo; });
     await ir('#/aportaciones/nueva', '#form-aportacion');
-    $('#anonima').click();
+    $('[data-registro="ANONIMO"]').click();
     await hasta(function () { return $('.selector-elegido'); }, 'anónimo elegido');
     ok(/^Anónimo/.test($('.selector-elegido strong').textContent), 'Botón "Aportación anónima" elige a "' + $('.selector-elegido strong').textContent + '"');
     escribir($('#monto'), '312.40');
@@ -372,6 +381,41 @@
     $('#form-miembro').requestSubmit();
     await hasta(function () { return location.hash === '#/miembros/' + anonimo.id; }, 'anónimo guardado');
     ok(anonimo.notas === 'Ofrendas en efectivo' && anonimo.nombre === 'Anónimo' && anonimo.activo, 'Editar "Anónimo": se guardan las notas y conserva su nombre');
+
+    // Grupos Familiares: funciona como un miembro, con carta anual
+    var grupos = mock.miembros.find(function (m) { return m.registro_sistema === 'GRUPOS_FAMILIARES'; });
+    await ir('#/aportaciones/nueva', '#form-aportacion');
+    $('[data-registro="GRUPOS_FAMILIARES"]').click();
+    await hasta(function () { return $('.selector-elegido'); }, 'grupos familiares elegido');
+    ok($('.selector-elegido strong').textContent === 'Grupos Familiares', 'Botón "Grupos Familiares" en Nueva aportación');
+    escribir($('#monto'), '95');
+    $('#form-aportacion').requestSubmit();
+    await hasta(function () { return $('.exito-registro'); }, 'aportación de grupos familiares registrada');
+    ok(/Grupos Familiares/.test($('.exito-registro .resumen').textContent), 'Aportación de "Grupos Familiares" registrada');
+
+    await ir('#/estados-cuenta?miembro=' + grupos.id, '.documento');
+    ok($('.documento .datos strong').textContent === 'Grupos Familiares', 'Estado de cuenta de "Grupos Familiares"');
+
+    await ir('#/cartas?miembro=' + grupos.id + '&anio=' + mock.HOY.slice(0, 4), '#cuerpo');
+    ok($('#cuerpo').value.indexOf('Grupos Familiares') >= 0, 'Carta anual de "Grupos Familiares"');
+    $('[data-tab="lote"]').click();
+    $('#form-lote').requestSubmit();
+    await hasta(function () { return $('#l-pdf'); }, 'lote con grupos familiares');
+    ok($$('#l-resultado tbody tr').some(function (tr) { return tr.textContent.indexOf(grupos.numero_miembro) >= 0; }),
+      'Lote de cartas incluye a "Grupos Familiares"');
+
+    await ir('#/miembros/' + grupos.id, '.cabecera h2');
+    ok(!$('#alternar-activo') && !$('#eliminar') && !!$('#contenido .cabecera a[href^="#/cartas"]'),
+      'Ficha de "Grupos Familiares": con carta anual, sin desactivar ni eliminar');
+
+    await ir('#/familias/nueva', '#form-familia');
+    escribir($('#c-nombre'), 'Familia Prueba');
+    $('#form-familia').requestSubmit();
+    var entradaFamilia = await hasta(function () { return $('#selector-miembro'); }, 'selector de familia');
+    entradaFamilia.focus();
+    escribir(entradaFamilia, 'grupos');
+    await hasta(function () { return $('.selector-vacio') && !/Buscando/.test($('.selector-vacio').textContent); }, 'búsqueda en familia');
+    ok(!$('.selector-opcion'), 'Familias: "Grupos Familiares" no se puede agregar a una familia');
 
     // 14. Configuración
     await ir('#/configuracion', '#form-inst');

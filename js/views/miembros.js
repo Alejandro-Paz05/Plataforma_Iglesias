@@ -5,7 +5,9 @@ import {
   dinero, dineroCentavos, aCentavos, fecha, fechaHora, nombreCompleto, lineasDireccion, anioActual, solicitarTexto,
 } from '../utils.js';
 import { icono } from '../icons.js';
-import { insigniaEstado, insigniaActivo, montarPaginacion, opciones, cargarFamilias, cargarFamilia } from '../components.js';
+import {
+  insigniaEstado, insigniaActivo, montarPaginacion, opciones, cargarFamilias, cargarFamilia, REGISTROS_SISTEMA,
+} from '../components.js';
 
 const NUEVA_FAMILIA = '__nueva__';
 
@@ -58,7 +60,7 @@ export async function lista({ cont, titulo }) {
     const res = $('#resultado', cont);
     res.style.opacity = '.6';
     let q = sb.from('miembros')
-      .select('id, numero_miembro, nombre, apellido, tipo_persona, telefono, email, ciudad, activo, es_anonimo', { count: 'exact' });
+      .select('id, numero_miembro, nombre, apellido, tipo_persona, telefono, email, ciudad, activo, registro_sistema', { count: 'exact' });
     if (filtros.estado === 'activos') q = q.eq('activo', true);
     else if (filtros.estado === 'inactivos') q = q.eq('activo', false);
     if (filtros.tipo) q = q.eq('tipo_persona', filtros.tipo);
@@ -79,8 +81,8 @@ export async function lista({ cont, titulo }) {
             ${data.length ? data.map((m) => html`
               <tr class="clic" data-id="${m.id}" tabindex="0">
                 <td class="mono nowrap">${m.numero_miembro}</td>
-                <td>${m.es_anonimo
-                  ? html`<strong>${m.nombre}</strong> <span class="insignia">Aportaciones anónimas</span>`
+                <td>${m.registro_sistema
+                  ? html`<strong>${m.nombre}</strong> <span class="insignia">${REGISTROS_SISTEMA[m.registro_sistema]?.insignia || 'Registro del sistema'}</span>`
                   : html`<strong>${m.apellido}</strong>, ${m.nombre}`}</td>
                 <td>${m.tipo_persona}</td>
                 <td class="nowrap">${m.telefono || ''}</td>
@@ -146,8 +148,8 @@ export async function formulario({ cont, params, query, titulo }) {
       <section class="tarjeta">
         <div class="tarjeta-titulo"><h3>Datos personales</h3></div>
         <div class="formulario">
-          ${m.es_anonimo ? alerta('info', html`Registro del sistema para las aportaciones anónimas: siempre aparece como
-            <strong>${m.nombre}</strong> y su nombre no se puede cambiar.`) : html`
+          ${m.registro_sistema ? alerta('info', html`Registro del sistema para ${REGISTROS_SISTEMA[m.registro_sistema]?.descripcion}:
+            siempre aparece como <strong>${m.nombre}</strong> y su nombre no se puede cambiar.`) : html`
           <div class="fila-campos">
             ${campo('nombre', 'Nombre', { requerido: true, max: 80, extra: 'autocomplete="off"' })}
             ${campo('apellido', 'Apellido', { requerido: true, max: 80, extra: 'autocomplete="off"' })}
@@ -159,7 +161,7 @@ export async function formulario({ cont, params, query, titulo }) {
             </div>
             ${campo('fecha_ingreso', 'Fecha de ingreso', { tipo: 'date' })}
           </div>
-          ${m.es_anonimo ? '' : html`
+          ${m.registro_sistema ? '' : html`
           <div class="campo">
             <label for="c-familia_id">Familia</label>
             <select id="c-familia_id" name="familia_id" class="entrada">${opcionesFamilia(familias, m.familia_id)}</select>
@@ -189,7 +191,7 @@ export async function formulario({ cont, params, query, titulo }) {
             <label for="c-notas">Notas</label>
             <textarea id="c-notas" name="notas" class="entrada" rows="3" maxlength="1000">${m.notas || ''}</textarea>
           </div>
-          ${id && !m.es_anonimo ? html`<label class="casilla"><input type="checkbox" id="c-activo" ${m.activo ? 'checked' : ''}> Miembro activo</label>` : ''}
+          ${id && !m.registro_sistema ? html`<label class="casilla"><input type="checkbox" id="c-activo" ${m.activo ? 'checked' : ''}> Miembro activo</label>` : ''}
         </div>
       </section>
       <div class="acciones">
@@ -249,8 +251,8 @@ export async function formulario({ cont, params, query, titulo }) {
       notas: valor('notas'),
       familia_id: valor('familia_id'),
     };
-    if (m.es_anonimo) {
-      // Nombre fijo ("Anónimo"), siempre activo y sin familia: lo garantiza el servidor.
+    if (m.registro_sistema) {
+      // Nombre fijo ("Anónimo", "Grupos Familiares"), siempre activo y sin familia: lo garantiza el servidor.
       delete datos.nombre;
       delete datos.apellido;
       delete datos.familia_id;
@@ -260,8 +262,8 @@ export async function formulario({ cont, params, query, titulo }) {
     const errores = [];
     $$('[aria-invalid]', form).forEach((x) => x.removeAttribute('aria-invalid'));
     const marcar = (k, msg) => { form.elements[k]?.setAttribute('aria-invalid', 'true'); errores.push(msg); };
-    if (!m.es_anonimo && !datos.nombre) marcar('nombre', 'El nombre es obligatorio.');
-    if (!m.es_anonimo && !datos.apellido) marcar('apellido', 'El apellido es obligatorio.');
+    if (!m.registro_sistema && !datos.nombre) marcar('nombre', 'El nombre es obligatorio.');
+    if (!m.registro_sistema && !datos.apellido) marcar('apellido', 'El apellido es obligatorio.');
     if (datos.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(datos.email)) marcar('email', 'El correo electrónico no es válido.');
     if (datos.fecha_ingreso && datos.fecha_ingreso < '1900-01-01') marcar('fecha_ingreso', 'La fecha de ingreso no es válida.');
     if (errores.length) {
@@ -347,7 +349,7 @@ export async function detalle({ cont, params, titulo }) {
     <div class="cabecera">
       <div>
         <h2>${nombreCompleto(m)}</h2>
-        <p><span class="mono">${m.numero_miembro}</span> · ${m.es_anonimo ? 'Aportaciones anónimas' : m.tipo_persona} · ${insigniaActivo(m.activo)}</p>
+        <p><span class="mono">${m.numero_miembro}</span> · ${m.registro_sistema ? REGISTROS_SISTEMA[m.registro_sistema]?.insignia : m.tipo_persona} · ${insigniaActivo(m.activo)}</p>
       </div>
       <div class="acciones">
         ${m.activo ? html`<a class="btn btn-primario" href="#/aportaciones/nueva?miembro=${m.id}">${icono('plus-circle')} Nueva aportación</a>` : ''}
@@ -359,6 +361,9 @@ export async function detalle({ cont, params, titulo }) {
     ${m.es_anonimo ? alerta('info', html`Registro del sistema para las <strong>aportaciones anónimas</strong>. Aparece como
       “Anónimo” en reportes, historial y estados de cuenta, y sus aportaciones cuentan en todos los totales. No recibe carta anual
       y no puede eliminarse ni desactivarse.`) : ''}
+    ${m.registro_sistema && !m.es_anonimo ? alerta('info', html`Registro del sistema para ${REGISTROS_SISTEMA[m.registro_sistema]?.descripcion}.
+      Funciona como un miembro (recibos, reportes, estado de cuenta y carta anual), pero su nombre es fijo y no puede
+      eliminarse, desactivarse ni pertenecer a una familia.`) : ''}
 
     <div class="rejilla rejilla-4">
       ${tarjetaDato(`Total ${anio}`, dineroCentavos(totalAnio(anio)))}
@@ -372,7 +377,7 @@ export async function detalle({ cont, params, titulo }) {
       <dl class="datos">
         <div><dt>Teléfono</dt><dd>${m.telefono || '—'}</dd></div>
         <div><dt>Correo electrónico</dt><dd>${m.email || '—'}</dd></div>
-        ${m.es_anonimo ? '' : html`<div><dt>Familia</dt><dd>${familia
+        ${m.registro_sistema ? '' : html`<div><dt>Familia</dt><dd>${familia
           ? html`<a href="#/familias/${familia.id}">${familia.nombre}</a> <span class="mono texto-tenue">${familia.numero_familia}</span>`
           : html`— <a class="texto-pequeno" href="#/miembros/${m.id}/editar">Asignar</a>`}</dd></div>`}
         <div><dt>Dirección</dt><dd>${direccion.length ? direccion.map((l) => html`${l}<br>`) : '—'}</dd></div>
@@ -408,7 +413,7 @@ export async function detalle({ cont, params, titulo }) {
       : html`<div class="vacio">Este miembro aún no tiene aportaciones registradas.</div>`}
     </section>
 
-    ${m.es_anonimo ? '' : html`<section class="tarjeta">
+    ${m.registro_sistema ? '' : html`<section class="tarjeta">
       <div class="tarjeta-titulo"><h3>Administración del registro</h3></div>
       <div class="acciones">
         <button type="button" class="btn" id="alternar-activo">
