@@ -4,6 +4,7 @@ import { estado, registrarEvento } from '../state.js';
 import {
   html, pintar, $, $$, alerta, aviso, mensajeError, dinero, dineroCentavos, aCentavos, entero, fecha, fechaHora,
   fechaValida, hoyISO, inicioMes, finMes, anioActual, MESES, capitalizar, obtenerTodos, descargarCSV, marcaArchivo,
+  normalizarBusqueda,
 } from '../utils.js';
 import { icono } from '../icons.js';
 import { opciones } from '../components.js';
@@ -16,7 +17,7 @@ const TIPOS = [
   { id: 'anual', texto: 'Aportaciones anuales', icono: 'bar-chart', filtros: ['anio', 'fondo', 'detalle'] },
   { id: 'miembro', texto: 'Por miembro', icono: 'users', filtros: ['desde', 'hasta', 'fondo'] },
   { id: 'fondo', texto: 'Por fondo', icono: 'layers', filtros: ['desde', 'hasta', 'detalle'] },
-  { id: 'metodo', texto: 'Por método de pago', icono: 'credit-card', filtros: ['desde', 'hasta', 'detalle'] },
+  { id: 'metodo', texto: 'Por método de pago', icono: 'credit-card', filtros: ['desde', 'hasta', 'metodo', 'detalle'] },
   { id: 'anuladas', texto: 'Anuladas y corregidas', icono: 'slash', filtros: ['desde', 'hasta'] },
   { id: 'miembros_activos', texto: 'Miembros activos', icono: 'user-check', filtros: ['tipoPersona'] },
   { id: 'miembros_inactivos', texto: 'Miembros inactivos', icono: 'user-x', filtros: ['tipoPersona'] },
@@ -262,26 +263,30 @@ async function construir(tipo) {
     }
     case 'fondo':
     case 'metodo': {
-      const filas = await aportaciones({ estado: 'REGISTRADA', desde: f.desde, hasta: f.hasta });
-      const total = sumar(filas);
       const porFondo = tipo.id === 'fondo';
+      // Un solo método (p. ej., solo Efectivo): el reporte incluye siempre su detalle.
+      const metodo = porFondo ? null : f.metodo_pago_id || null;
+      const filas = await aportaciones({ estado: 'REGISTRADA', desde: f.desde, hasta: f.hasta, metodo_pago_id: metodo });
+      const total = sumar(filas);
       const grupos = porFondo
         ? agrupar(filas, (x) => x.fondo_id, (x) => x.fondo_nombre)
         : agrupar(filas, (x) => x.metodo_pago_id, (x) => x.metodo_pago_nombre);
       const secciones = [seccionAgrupada(porFondo ? 'Totales por fondo' : 'Totales por método de pago', porFondo ? 'Fondo' : 'Método', grupos, total)];
-      if (f.detalle) {
+      if (f.detalle || metodo) {
         for (const g of grupos) {
           const delGrupo = filas.filter((x) => (porFondo ? x.fondo_id : x.metodo_pago_id) === g.clave);
           secciones.push(seccionDetalle(delGrupo, `Detalle: ${g.etiqueta}`));
         }
       }
       return {
-        titulo: porFondo ? 'Aportaciones por fondo' : 'Aportaciones por método de pago',
-        subtitulo: [periodo, NOTA_VALIDAS].join(' · '),
+        titulo: porFondo ? 'Aportaciones por fondo' : metodo ? `Aportaciones en ${nombreMetodo(metodo)}` : 'Aportaciones por método de pago',
+        subtitulo: [...(metodo ? [`Método: ${nombreMetodo(metodo)}`] : []), periodo, NOTA_VALIDAS].join(' · '),
         resumen: resumenBasico(filas),
-        horizontal: f.detalle,
+        horizontal: f.detalle || !!metodo,
         secciones,
-        archivo: `reporte-por-${tipo.id}-${f.desde}-a-${f.hasta}`,
+        archivo: metodo
+          ? `reporte-${normalizarBusqueda(nombreMetodo(metodo)).replace(/[^a-z0-9]+/g, '-')}-${f.desde}-a-${f.hasta}`
+          : `reporte-por-${tipo.id}-${f.desde}-a-${f.hasta}`,
       };
     }
     case 'anuladas': {

@@ -178,6 +178,19 @@
     $('#filtros-reporte').requestSubmit();
     await hasta(function () { return $('#rep-descargar'); }, 'reporte anuladas');
     ok($('#salida').textContent.indexOf('Motivo') >= 0, 'Reporte de anuladas con motivo');
+    $('[data-tipo="metodo"]').click();
+    await espera(30);
+    var efectivo = $$('#r-metodo option').find(function (o) { return o.textContent === 'Efectivo'; });
+    escribir($('#r-metodo'), efectivo.value);
+    $('#filtros-reporte').requestSubmit();
+    await hasta(function () { return $('#rep-descargar') && /Aportaciones en Efectivo/.test($('#salida').textContent); }, 'reporte solo efectivo');
+    var metodosDetalle = $$('#salida tbody tr').filter(function (tr) { return tr.cells.length === 8; })
+      .map(function (tr) { return tr.cells[5].textContent.trim(); });
+    ok(metodosDetalle.length > 0 && metodosDetalle.every(function (m) { return m === 'Efectivo'; }),
+      'Reporte por método: solo Efectivo (' + metodosDetalle.length + ' aportaciones en el detalle)');
+    $('#rep-descargar').click();
+    await espera(300);
+    escribir($('#r-metodo'), '');
     $('[data-tipo="miembros_activos"]').click();
     await espera(30);
     $('#filtros-reporte').requestSubmit();
