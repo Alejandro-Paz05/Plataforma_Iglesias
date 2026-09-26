@@ -2,7 +2,6 @@ PLANTILLAS PARA IMPORTAR DATOS ANTIGUOS
 Sistema de Administración de Aportaciones - Centro Evangelístico Ebenezer
 
 Llene estos dos archivos (se pueden abrir y guardar con Excel como "CSV UTF-8").
-Las filas marcadas "(EJEMPLO)" son solo de muestra: bórrelas antes de enviar.
 Si solo tiene la lista de miembros, envíe solo miembros.csv.
 
 ----------------------------------------------------------------------
